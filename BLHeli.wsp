@@ -1814,7 +1814,7 @@ LargeButtons=False
 ptn_Child1=MainFrame
 ptn_Child2=ChildFrames
 [WorkState_v1_1.Frames.MainFrame]
-WindowPlacement=MCAAAAAACAAAAAAADAAAAAAAPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPMPAAAAAAEMAAAAAAEDFAAAAAFDDAAAAA
+WindowPlacement=MCAAAAAACAAAAAAADAAAAAAAAADIPPPPAADIPPPPPPPPPPPPPPPPPPPPMPAAAAAAEMAAAAAAEDFAAAAAFDDAAAAA
 Title=Silicon Laboratories IDE - [BLHeli.asm]
 [WorkState_v1_1.Frames.ChildFrames]
 ptn_Child1=Document-0
@@ -1943,19 +1943,16 @@ ptn_Child2=FileName
 [WorkState_v1_1.Header Files.FolderFlags]
 FolderFlags=0
 [WorkState_v1_1.Header Files.FileName]
-FileName=BLHeliTxPgm.inc
-ptn_Child1=FileName
-[WorkState_v1_1.Header Files.FileName.FileName]
 FileName=C8051F390.INC
 ptn_Child1=FileName
-[WorkState_v1_1.Header Files.FileName.FileName.FileName]
+[WorkState_v1_1.Header Files.FileName.FileName]
 FileName=Platinum_Pro_30A.inc
 ptn_Child1=FileName
-[WorkState_v1_1.Header Files.FileName.FileName.FileName.FileName]
+[WorkState_v1_1.Header Files.FileName.FileName.FileName]
 FileName=Skywalker_20A.inc
 ptn_Child1=FileName
-[WorkState_v1_1.Header Files.FileName.FileName.FileName.FileName.FileName]
+[WorkState_v1_1.Header Files.FileName.FileName.FileName.FileName]
 FileName=Skywalker_40A.inc
 ptn_Child1=FileName
-[WorkState_v1_1.Header Files.FileName.FileName.FileName.FileName.FileName.FileName]
+[WorkState_v1_1.Header Files.FileName.FileName.FileName.FileName.FileName]
 FileName=C8051F330.INC

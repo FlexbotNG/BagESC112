@@ -1,183 +1,5 @@
 $NOMOD51
 ;**** **** **** **** ****
-;
-; BLHeli program for controlling brushless motors in helicopters and multirotors
-;
-; Copyright 2011, 2012 Steffen Skaug
-; This program is distributed under the terms of the GNU General Public License
-;
-; This file is part of BLHeli.
-;
-; BLHeli is free software: you can redistribute it and/or modify
-; it under the terms of the GNU General Public License as published by
-; the Free Software Foundation, either version 3 of the License, or
-; (at your option) any later version.
-;
-; BLHeli is distributed in the hope that it will be useful,
-; but WITHOUT ANY WARRANTY; without even the implied warranty of
-; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-; GNU General Public License for more details.
-;
-; You should have received a copy of the GNU General Public License
-; along with BLHeli.  If not, see <http://www.gnu.org/licenses/>.
-;
-;**** **** **** **** ****
-;
-; The software was initially designed for use with Eflite mCP X, but is now adapted to copters/planes in general
-;
-; The software was inspired by and started from from Bernard Konze's BLMC: http://home.versanet.de/~bkonze/blc_6a/blc_6a.htm
-; And also Simon Kirby's TGY: https://github.com/sim-/tgy
-;
-; This file is best viewed with tab width set to 5
-;
-; The input signal can be positive 1kHz, 2kHz, 4kHz, 8kHz or 12kHz PWM (e.g. taken from the "resistor tap" on mCPx)
-; And the input signal can be PPM (1-2ms) at rates up to several hundred Hz.
-; The code adapts itself to the various input modes/frequencies
-; The code ESC can also be programmed to accept inverted input signal.
-;
-; The first lines of the software must be modified according to the chosen environment:
-; Uncomment the selected ESC and main/tail/multi mode
-; BESC EQU "ESC"_"mode" 						
-; 
-;**** **** **** **** ****
-; Revision history:
-; - Rev1.0: Initial revision based upon BLHeli for AVR controllers
-; - Rev2.0: Changed "Eeprom" initialization, layout and defaults
-;           Various changes and improvements to comparator reading. Now using timer1 for time from pwm on/off
-;           Beeps are made louder
-;           Added programmable low voltage limit
-;           Added programmable damped tail mode (only for 1S ESCs)
-;           Added programmable motor rotation direction
-; - Rev2.1: (minor changes by 4712)
-;		  Added Disable TX Programming by PC Setup Application 
-;		  therfore changed EEPROM_LAYOUT_REVISION = 8					
-;		  Added Vdd Monitor as reset source when writing to "EEProm"
-;		  Changed for use of batch file to assemble, link and make hex files	
-; - Rev2.2: (minor changes by 4712)
-;           Added Disable Throttle Re-Arming every motor start by PC Setup Application 
-; - Rev2.3: (minor changes by 4712)
-;           Added bugfixed (2x CLR C before j(n)c operations)thx Steffen!			
-; - Rev2.4: Revisions 2.1 to 2.3 integrated
-; - Rev3.0: Added PPM (1050us-1866us) as accepted input signal
-;           Added startup rpm as a programming parameter
-;           Added startup acceleration as a programming parameter
-;           Added option for using voltage measurements to compensate motor power
-;           Added governor target by setup as a governor mode option
-;           Governor is kept active regardless of rpm
-;           Smooth governor spoolup/down in arm and setup modes
-;           Increased governor P and I gain programming ranges
-;           Increased and changed low voltage limit programming range
-;           Disabled tx programming entry for all but the first arming sequence after power on
-;           Made it possible to skip parameters in tx programming by setting throttle midstick
-;           Made it default not to rearm for every restart
-; - Rev3.1: Fixed bug that prevented chosen parameter to be set in tx programming
-; - Rev3.2: ...also updated the EEPROM revision parameter
-; - Rev3.3: Fixed negative number bug in voltage compensation
-;           Fixed bug in startup power calculation for non-default power
-;           Prevented possibility for voltage compensation fighting low voltage limiting
-;           Applied overall spoolup control to ensure soft spoolup in any mode
-;           Added a delay of 3 seconds from initiation of main motor stop until new startup is allowed
-;           Reduced beep power to reduce power consumption for very strong motors/ESCs
-; - Rev3.4: Fixed bug that prevented full power in governor arm and setup modes
-;           Increased NFETON_DELAY for XP_7A and XP_12A to allow for more powerful fets
-;           Increased initial spoolup power, and linked to startup power
-; - Rev4.0: Fixed bug that made tail tx program beeps very weak
-;           Added thermal protection feature
-;           Governor P and I gain ranges are extended up to 8.0x gain
-;           Startup sequence is aborted upon zero throttle
-;           Avoided voltage compensation function induced latency for tail when voltage compensation is not enabled
-;           Improved input signal frequency detection robustness
-; - Rev4.1: Increased thermal protection temperature limits
-; - Rev5.0: Added multi(copter) operating mode. TAIL define changed to MODE with three modes: MAIN, TAIL and MULTI
-;           Added programmable commutation timing
-;           Added a damped light mode that has less damping, but that can be used with all escs
-;           Added programmable damping force
-;           Added thermal protection for startup too
-;           Added wait beeps when waiting more than 30 sec for throttle above zero (after having been armed)
-;           Modified tail idling to provide option for very low speeds
-;           Changed PPM range to 1150-1830us
-;           Arming sequence is dropped for PPM input, unless it is governor arm mode
-;           Loss of input signal will immediately stop the motor for PPM input
-;           Bug corrected in Turnigy Plush 6A voltage measurement setup
-;           FET switching delays are set for original fets. Stronger/doubled/tripled etc fets may require faster pfet off switching
-;           Miscellaneous other changes
-; - Rev6.0: Reverted comparator reading routine to rev5.0 equivalent, in order to avoid tail motor stops
-;           Added governor range programmability
-;           Implemented startup retry sequence with varying startup power for multi mode
-;           In damped light mode, damping is now applied to the active nfet phase for fully damped capable ESCs
-; - Rev6.1: Added input signal qualification criteria for PPM, to avoid triggering on noise spikes (fix for plush hardware)
-;           Changed main and multi mode stop criteria. Will now be in run mode, even if RC pulse input is zero
-;           Fixed bug in commutation that caused rough running in damped light mode
-;           Miscellaneous other changes
-; - Rev7.0  Added direct startup mode programmability
-;           Added throttle calibration. Min>=1000us and Max<=2000us. Difference must be >520us, otherwise max is shifted so that difference=520us
-;           Added programmable throttle change rate
-;           Added programmable beep strength, beacon strength and beacon delay
-;           Reduced power step to full power significantly
-;           Miscellaneous other changes
-; - Rev8.0  Added a 2 second delay after power up, to wait for receiver initialization
-;           Added a programming option for disabling low voltage limit, and made it default for MULTI
-;           Added programable demag compensation, using the concept of SimonK
-;           Improved robustness against noisy input signal
-;           Refined direct startup
-;           Removed voltage compensation
-;           Miscellaneous other changes
-; - Rev9.0  Increased programming range for startup power, and made its default ESC dependent
-;           Made default startup method ESC dependent
-;           Even more smooth and gentle spoolup for MAIN, to suit larger helis
-;           Improved transition from stepped startup to run
-;           Refined direct startup
-; - Rev9.1  Fixed bug that changed FW revision after throttle calibration or TX programming
-; - Rev9.2  Altered timing of throttle calibration in order to work with MultiWii calibration firmware
-;           Reduced main spoolup time to around 5 seconds
-;           Changed default beacon delay to 3 minutes
-; - Rev9.3  Fixed bug in Plush 60/80A temperature reading, that caused failure in operation above 4S
-;           Corrected temperature limit for HiModel cool 22/33/41A, RCTimer 6A, Skywalker 20/40A, Turnigy AE45A, Plush 40/60/80A. Limit was previously set too high
-; - Rev9.4  Improved timing for increased maximum rpm limit
-; - Rev10.0 Added closed loop mode for multi
-;           Added high/low BEC voltage option (for the ESCs where HW supports it)
-;           Added method of resetting all programmed parameter values to defaults by TX programming
-;           Added Turnigy K-force 40A and Turnigy K-force 120A HV ESCs
-;           Enabled fully damped mode for several ESCs
-;           Extended startup power range downwards to enable very smooth start for large heli main motors
-;           Extended damping force with a highest setting
-;           Corrected temperature limits for F310 chips (Plush 40A and AE 45A)
-;           Implemented temperature reading average in order to avoid problems with ADC noise on Skywalkers
-;           Increased switching delays for XP 7A fast, in order to avoid cross conduction of N and P fets
-;           Miscellaneous other changes
-; - Rev10.1 Relaxed RC signal jitter requirement during frequency measurement
-;           Corrected bug that prevented using governor low
-;           Enabled vdd monitor always, in order to reduce likelihood of accidental overwriting of adjustments
-;           Fixed bug that caused stop for PPM input above 2048us, and moved upper accepted limit to 2160us
-; - Rev10.2 Corrected temperature limit for AE20-30/XP7-25, where limit was too high
-;           Corrected temperature limit for 120HV, where limit was too low
-;           Fixed bug that caused AE20/25/30A not to run in reverse
-; - Rev10.3 Removed vdd monitor for 1S capable ESCs, in order to avoid brownouts/resets
-;           Made auto bailout spoolup for main more smooth
-; - Rev10.4 Ensured that main spoolup and governor activation will always be smooth, regardless of throttle input
-;           Added capability to operate on 12kHz input signal too
-; - Rev11.0 Fixed bug of programming default values for governor in MULTI mode
-;           Disabled interrupts explicitly some places, to avoid possibilities for unintentional fet switching
-;           Changed interrupt disable strategy, to always allow pwm interrupts, to avoid noise when running at low rpms
-;           Added governor middle range for MAIN mode
-;           Added bidirectional mode for TAIL and MULTI mode with PPM input
-;           Changed and improved demag compensation
-;           Miscellaneous other changes
-; - Rev11.1 Fixed bug of slow acceleration response for MAIN mode running without governor
-;           Fixed bug with PWM input, where throttle remains high even when zeroing throttle (seen on V922 tail)
-;           Fixed bug in bidirectional operation, where direction change could cause reset
-;           Improved autorotation bailout for MAIN
-;           Reduced min speed back to 1220 erpm
-;           Misc code cleanups
-; - Rev11.2 Fixed throttle calibration bug
-;           Added high side driver precharge for all-nfet ESCs
-;           Optimized timing in general and for demag compensation in particular
-;           Auto bailout functionality modified
-;           Governor is deactivated for throttle inputs below 10%
-;           Increased beacon delay times
-;
-;
-;**** **** **** **** ****
 ; Up to 8K Bytes of In-System Self-Programmable Flash
 ; 768 Bytes Internal SRAM
 ;
@@ -225,453 +47,27 @@ $NOMOD51
 ;
 ;**** **** **** **** ****
 ; List of enumerated supported ESCs and modes  (main, tail or multi)
-XP_3A_Main 					EQU 1
-XP_3A_Tail 					EQU 2
-XP_3A_Multi 					EQU 3
-XP_7A_Main 					EQU 4
-XP_7A_Tail 					EQU 5
-XP_7A_Multi 					EQU 6
-XP_7A_Fast_Main 				EQU 7
-XP_7A_Fast_Tail 				EQU 8
-XP_7A_Fast_Multi 				EQU 9
-XP_12A_Main 					EQU 10
-XP_12A_Tail 					EQU 11
-XP_12A_Multi 					EQU 12
-XP_18A_Main 					EQU 13
-XP_18A_Tail 					EQU 14
-XP_18A_Multi 					EQU 15
-XP_25A_Main 					EQU 16
-XP_25A_Tail 					EQU 17
-XP_25A_Multi 					EQU 18
-XP_35A_SW_Main 				EQU 19
-XP_35A_SW_Tail 				EQU 20
-XP_35A_SW_Multi 				EQU 21
 DP_3A_Main 					EQU 22
 DP_3A_Tail  					EQU 23
 DP_3A_Multi  					EQU 24
-Supermicro_3p5A_Main 			EQU 25
-Supermicro_3p5A_Tail 			EQU 26   
-Supermicro_3p5A_Multi 			EQU 27   
-Turnigy_Plush_6A_Main 			EQU 28
-Turnigy_Plush_6A_Tail 			EQU 29   
-Turnigy_Plush_6A_Multi 			EQU 30   
-Turnigy_Plush_10A_Main 			EQU 31
-Turnigy_Plush_10A_Tail 			EQU 32   
-Turnigy_Plush_10A_Multi 			EQU 33   
 Turnigy_Plush_12A_Main 			EQU 34
 Turnigy_Plush_12A_Tail 			EQU 35   
 Turnigy_Plush_12A_Multi 			EQU 36   
-Turnigy_Plush_18A_Main 			EQU 37
-Turnigy_Plush_18A_Tail 			EQU 38   
-Turnigy_Plush_18A_Multi 			EQU 39   
-Turnigy_Plush_25A_Main 			EQU 40
-Turnigy_Plush_25A_Tail 			EQU 41   
-Turnigy_Plush_25A_Multi 			EQU 42   
-Turnigy_Plush_30A_Main 			EQU 43
-Turnigy_Plush_30A_Tail 			EQU 44   
-Turnigy_Plush_30A_Multi 			EQU 45   
-Turnigy_Plush_40A_Main 			EQU 46
-Turnigy_Plush_40A_Tail 			EQU 47   
-Turnigy_Plush_40A_Multi 			EQU 48   
-Turnigy_Plush_60A_Main 			EQU 49
-Turnigy_Plush_60A_Tail 			EQU 50   
-Turnigy_Plush_60A_Multi 			EQU 51   
-Turnigy_Plush_80A_Main 			EQU 52
-Turnigy_Plush_80A_Tail 			EQU 53   
-Turnigy_Plush_80A_Multi 			EQU 54   
-Turnigy_Plush_Nfet_18A_Main 		EQU 55
-Turnigy_Plush_Nfet_18A_Tail 		EQU 56   
-Turnigy_Plush_Nfet_18A_Multi 		EQU 57   
-Turnigy_Plush_Nfet_25A_Main 		EQU 58
-Turnigy_Plush_Nfet_25A_Tail 		EQU 59   
-Turnigy_Plush_Nfet_25A_Multi 		EQU 60   
-Turnigy_Plush_Nfet_30A_Main 		EQU 61
-Turnigy_Plush_Nfet_30A_Tail 		EQU 62   
-Turnigy_Plush_Nfet_30A_Multi 		EQU 63   
-Turnigy_AE_20A_Main 			EQU 64
-Turnigy_AE_20A_Tail 			EQU 65   
-Turnigy_AE_20A_Multi 			EQU 66   
-Turnigy_AE_25A_Main 			EQU 67
-Turnigy_AE_25A_Tail 			EQU 68   
-Turnigy_AE_25A_Multi 			EQU 69   
-Turnigy_AE_30A_Main 			EQU 70
-Turnigy_AE_30A_Tail 			EQU 71   
-Turnigy_AE_30A_Multi 			EQU 72   
-Turnigy_AE_45A_Main 			EQU 73
-Turnigy_AE_45A_Tail 			EQU 74   
-Turnigy_AE_45A_Multi 			EQU 75   
 Turnigy_KForce_40A_Main 			EQU 76   
 Turnigy_KForce_40A_Tail 			EQU 77   
-Turnigy_KForce_40A_Multi 		EQU 78   
-Turnigy_KForce_70A_HV_Main 		EQU 79   
-Turnigy_KForce_70A_HV_Tail 		EQU 80   
-Turnigy_KForce_70A_HV_Multi 		EQU 81   
-Turnigy_KForce_120A_HV_Main 		EQU 82   
-Turnigy_KForce_120A_HV_Tail 		EQU 83   
-Turnigy_KForce_120A_HV_Multi 		EQU 84   
-Turnigy_KForce_120A_HV_v2_Main	EQU 85   
-Turnigy_KForce_120A_HV_v2_Tail 	EQU 86   
-Turnigy_KForce_120A_HV_v2_Multi 	EQU 87   
-Skywalker_12A_Main 				EQU 88
-Skywalker_12A_Tail 				EQU 89   
-Skywalker_12A_Multi 			EQU 90   
+Turnigy_KForce_40A_Multi 		EQU 78    
 Skywalker_20A_Main 				EQU 91
 Skywalker_20A_Tail 				EQU 92   
 Skywalker_20A_Multi 			EQU 93   
 Skywalker_40A_Main 				EQU 94
 Skywalker_40A_Tail 				EQU 95   
 Skywalker_40A_Multi 			EQU 96   
-HiModel_Cool_22A_Main 			EQU 97
-HiModel_Cool_22A_Tail 			EQU 98   
-HiModel_Cool_22A_Multi 			EQU 99   
-HiModel_Cool_33A_Main 			EQU 100
-HiModel_Cool_33A_Tail 			EQU 101   
-HiModel_Cool_33A_Multi 			EQU 102  
-HiModel_Cool_41A_Main 			EQU 103
-HiModel_Cool_41A_Tail 			EQU 104  
-HiModel_Cool_41A_Multi 			EQU 105  
-RCTimer_6A_Main 				EQU 106   
-RCTimer_6A_Tail 				EQU 107  
-RCTimer_6A_Multi 				EQU 108  
-Align_RCE_BL15X_Main			EQU 109   
-Align_RCE_BL15X_Tail 			EQU 110  
-Align_RCE_BL15X_Multi 			EQU 111  
-Align_RCE_BL15P_Main			EQU 112  
-Align_RCE_BL15P_Tail 			EQU 113  
-Align_RCE_BL15P_Multi 			EQU 114  
-Align_RCE_BL35X_Main			EQU 115  
-Align_RCE_BL35X_Tail 			EQU 116  
-Align_RCE_BL35X_Multi 			EQU 117  
-Align_RCE_BL35P_Main			EQU 118   
-Align_RCE_BL35P_Tail 			EQU 119  
-Align_RCE_BL35P_Multi 			EQU 120  
-Gaui_GE_183_18A_Main			EQU 121   
-Gaui_GE_183_18A_Tail 			EQU 122  
-Gaui_GE_183_18A_Multi 			EQU 123  
-H_King_10A_Main				EQU 124   
-H_King_10A_Tail 				EQU 125  
-H_King_10A_Multi 				EQU 126  
-H_King_20A_Main				EQU 127   
-H_King_20A_Tail 				EQU 128  
-H_King_20A_Multi 				EQU 129  
-H_King_35A_Main				EQU 130   
-H_King_35A_Tail 				EQU 131 
-H_King_35A_Multi 				EQU 132  
-H_King_50A_Main				EQU 133   
-H_King_50A_Tail 				EQU 134  
-H_King_50A_Multi 				EQU 135  
-Polaris_Thunder_12A_Main			EQU 136   
-Polaris_Thunder_12A_Tail 		EQU 137  
-Polaris_Thunder_12A_Multi 		EQU 138  
-Polaris_Thunder_20A_Main			EQU 139   
-Polaris_Thunder_20A_Tail 		EQU 140  
-Polaris_Thunder_20A_Multi 		EQU 141  
-Polaris_Thunder_30A_Main			EQU 142   
-Polaris_Thunder_30A_Tail 		EQU 143  
-Polaris_Thunder_30A_Multi 		EQU 144  
-Polaris_Thunder_40A_Main			EQU 145   
-Polaris_Thunder_40A_Tail 		EQU 146  
-Polaris_Thunder_40A_Multi 		EQU 147  
-Polaris_Thunder_60A_Main			EQU 148   
-Polaris_Thunder_60A_Tail 		EQU 149  
-Polaris_Thunder_60A_Multi 		EQU 150  
-Polaris_Thunder_80A_Main			EQU 151   
-Polaris_Thunder_80A_Tail 		EQU 152  
-Polaris_Thunder_80A_Multi 		EQU 153  
-Polaris_Thunder_100A_Main		EQU 154   
-Polaris_Thunder_100A_Tail 		EQU 155  
-Polaris_Thunder_100A_Multi 		EQU 156  
 Platinum_Pro_30A_Main			EQU 157   
 Platinum_Pro_30A_Tail 			EQU 158  
 Platinum_Pro_30A_Multi 			EQU 159  
-EAZY_3Av2_Main					EQU 160   
-EAZY_3Av2_Tail 				EQU 161  
-EAZY_3Av2_Multi 				EQU 162  
-Tarot_30A_Main					EQU 163   
-Tarot_30A_Tail 				EQU 164  
-Tarot_30A_Multi 				EQU 165  
-SkyIII_30A_Main				EQU 166   
-SkyIII_30A_Tail 				EQU 167  
-SkyIII_30A_Multi 				EQU 168  
-
-;**** **** **** **** ****
-; Select the ESC and mode to use (or unselect all for use with external batch compile file)
-;BESC EQU XP_3A_Main
-;BESC EQU XP_3A_Tail
-;BESC EQU XP_3A_Multi
-;BESC EQU XP_7A_Main
-;BESC EQU XP_7A_Tail
-;BESC EQU XP_7A_Multi
-;BESC EQU XP_7A_Fast_Main
-;BESC EQU XP_7A_Fast_Tail
-;BESC EQU XP_7A_Fast_Multi
-;BESC EQU XP_12A_Main
-;BESC EQU XP_12A_Tail 
-;BESC EQU XP_12A_Multi
-;BESC EQU XP_18A_Main 
-;BESC EQU XP_18A_Tail 
-;BESC EQU XP_18A_Multi
-;BESC EQU XP_25A_Main 
-;BESC EQU XP_25A_Tail 
-;BESC EQU XP_25A_Multi
-;BESC EQU XP_35A_SW_Main
-;BESC EQU XP_35A_SW_Tail 
-;BESC EQU XP_35A_SW_Multi
-;BESC EQU DP_3A_Main 						
-;BESC EQU DP_3A_Tail
-;BESC EQU DP_3A_Multi
-;BESC EQU Supermicro_3p5A_Main
-;BESC EQU Supermicro_3p5A_Tail
-;BESC EQU Supermicro_3p5A_Multi
-;BESC EQU Turnigy_Plush_6A_Main 
-;BESC EQU Turnigy_Plush_6A_Tail 
-;BESC EQU Turnigy_Plush_6A_Multi
-;BESC EQU Turnigy_Plush_10A_Main 
-;BESC EQU Turnigy_Plush_10A_Tail 
-;BESC EQU Turnigy_Plush_10A_Multi
-;BESC EQU Turnigy_Plush_12A_Main 
-;BESC EQU Turnigy_Plush_12A_Tail 
-;BESC EQU Turnigy_Plush_12A_Multi
-;BESC EQU Turnigy_Plush_18A_Main 
-;BESC EQU Turnigy_Plush_18A_Tail 
-;BESC EQU Turnigy_Plush_18A_Multi
-;BESC EQU Turnigy_Plush_25A_Main 
-;BESC EQU Turnigy_Plush_25A_Tail
-;BESC EQU Turnigy_Plush_25A_Multi
-;BESC EQU Turnigy_Plush_30A_Main 
-;BESC EQU Turnigy_Plush_30A_Tail 
-;BESC EQU Turnigy_Plush_30A_Multi
-;BESC EQU Turnigy_Plush_40A_Main  
-;BESC EQU Turnigy_Plush_40A_Tail 
-;BESC EQU Turnigy_Plush_40A_Multi
-;BESC EQU Turnigy_Plush_60A_Main
-;BESC EQU Turnigy_Plush_60A_Tail 
-;BESC EQU Turnigy_Plush_60A_Multi
-;BESC EQU Turnigy_Plush_80A_Main
-;BESC EQU Turnigy_Plush_80A_Tail 
-;BESC EQU Turnigy_Plush_80A_Multi
-;BESC EQU Turnigy_Plush_Nfet_18A_Main 
-;BESC EQU Turnigy_Plush_Nfet_18A_Tail 
-;BESC EQU Turnigy_Plush_Nfet_18A_Multi
-;BESC EQU Turnigy_Plush_Nfet_25A_Main 
-;BESC EQU Turnigy_Plush_Nfet_25A_Tail
-;BESC EQU Turnigy_Plush_Nfet_25A_Multi
-;BESC EQU Turnigy_Plush_Nfet_30A_Main  
-;BESC EQU Turnigy_Plush_Nfet_30A_Tail 
-;BESC EQU Turnigy_Plush_Nfet_30A_Multi
-;BESC EQU Turnigy_AE_20A_Main 
-;BESC EQU Turnigy_AE_20A_Tail 
-;BESC EQU Turnigy_AE_20A_Multi
-;BESC EQU Turnigy_AE_25A_Main 
-;BESC EQU Turnigy_AE_25A_Tail 
-;BESC EQU Turnigy_AE_25A_Multi
-;BESC EQU Turnigy_AE_30A_Main 
-;BESC EQU Turnigy_AE_30A_Tail 
-;BESC EQU Turnigy_AE_30A_Multi
-;BESC EQU Turnigy_AE_45A_Main
-;BESC EQU Turnigy_AE_45A_Tail 
-;BESC EQU Turnigy_AE_45A_Multi
-;BESC EQU Turnigy_KForce_40A_Main
-;BESC EQU Turnigy_KForce_40A_Tail 
-;BESC EQU Turnigy_KForce_40A_Multi
-;BESC EQU Turnigy_KForce_70A_HV_Main
-;BESC EQU Turnigy_KForce_70A_HV_Tail 
-;BESC EQU Turnigy_KForce_70A_HV_Multi
-;BESC EQU Turnigy_KForce_120A_HV_Main
-;BESC EQU Turnigy_KForce_120A_HV_Tail 
-;BESC EQU Turnigy_KForce_120A_HV_Multi
-;BESC EQU Turnigy_KForce_120A_HV_v2_Main
-;BESC EQU Turnigy_KForce_120A_HV_v2_Tail 
-;BESC EQU Turnigy_KForce_120A_HV_v2_Multi
-;BESC EQU Skywalker_12A_Main
-;BESC EQU Skywalker_12A_Tail 
-;BESC EQU Skywalker_12A_Multi
-;BESC EQU Skywalker_20A_Main
-;BESC EQU Skywalker_20A_Tail 
-;BESC EQU Skywalker_20A_Multi
-;BESC EQU Skywalker_40A_Main 
-;BESC EQU Skywalker_40A_Tail 
-;BESC EQU Skywalker_40A_Multi
-;BESC EQU HiModel_Cool_22A_Main
-;BESC EQU HiModel_Cool_22A_Tail
-;BESC EQU HiModel_Cool_22A_Multi
-;BESC EQU HiModel_Cool_33A_Main
-;BESC EQU HiModel_Cool_33A_Tail
-;BESC EQU HiModel_Cool_33A_Multi
-;BESC EQU HiModel_Cool_41A_Main
-;BESC EQU HiModel_Cool_41A_Tail
-;BESC EQU HiModel_Cool_41A_Multi
-;BESC EQU RCTimer_6A_Main
-;BESC EQU RCTimer_6A_Tail
-;BESC EQU RCTimer_6A_Multi
-;BESC EQU Align_RCE_BL15X_Main
-;BESC EQU Align_RCE_BL15X_Tail
-;BESC EQU Align_RCE_BL15X_Multi
-;BESC EQU Align_RCE_BL15P_Main
-;BESC EQU Align_RCE_BL15P_Tail
-;BESC EQU Align_RCE_BL15P_Multi
-;BESC EQU Align_RCE_BL35X_Main 
-;BESC EQU Align_RCE_BL35X_Tail
-;BESC EQU Align_RCE_BL35X_Multi
-;BESC EQU Align_RCE_BL35P_Main
-;BESC EQU Align_RCE_BL35P_Tail
-;BESC EQU Align_RCE_BL35P_Multi
-;BESC EQU Gaui_GE_183_18A_Main
-;BESC EQU Gaui_GE_183_18A_Tail
-;BESC EQU Gaui_GE_183_18A_Multi
-;BESC EQU H_King_10A_Main
-;BESC EQU H_King_10A_Tail
-;BESC EQU H_King_10A_Multi
-;BESC EQU H_King_20A_Main
-;BESC EQU H_King_20A_Tail
-;BESC EQU H_King_20A_Multi
-;BESC EQU H_King_35A_Main
-;BESC EQU H_King_35A_Tail
-;BESC EQU H_King_35A_Multi
-;BESC EQU H_King_50A_Main
-;BESC EQU H_King_50A_Tail
-;BESC EQU H_King_50A_Multi
-;BESC EQU Polaris_Thunder_12A_Main
-;BESC EQU Polaris_Thunder_12A_Tail
-;BESC EQU Polaris_Thunder_12A_Multi
-;BESC EQU Polaris_Thunder_20A_Main
-;BESC EQU Polaris_Thunder_20A_Tail
-;BESC EQU Polaris_Thunder_20A_Multi
-;BESC EQU Polaris_Thunder_30A_Main
-;BESC EQU Polaris_Thunder_30A_Tail
-;BESC EQU Polaris_Thunder_30A_Multi
-;BESC EQU Polaris_Thunder_40A_Main
-;BESC EQU Polaris_Thunder_40A_Tail
-;BESC EQU Polaris_Thunder_40A_Multi
-;BESC EQU Polaris_Thunder_60A_Main
-;BESC EQU Polaris_Thunder_60A_Tail
-;BESC EQU Polaris_Thunder_60A_Multi
-;BESC EQU Polaris_Thunder_80A_Main
-;BESC EQU Polaris_Thunder_80A_Tail
-;BESC EQU Polaris_Thunder_80A_Multi
-;BESC EQU Polaris_Thunder_100A_Main
-;BESC EQU Polaris_Thunder_100A_Tail
-;BESC EQU Polaris_Thunder_100A_Multi
-;BESC EQU Platinum_Pro_30A_Main
-;BESC EQU Platinum_Pro_30A_Tail
-;BESC EQU Platinum_Pro_30A_Multi
-;BESC EQU EAZY_3Av2_Main
-;BESC EQU EAZY_3Av2_Tail
-;BESC EQU EAZY_3Av2_Multi
-;BESC EQU Tarot_30A_Main
-;BESC EQU Tarot_30A_Tail
-;BESC EQU Tarot_30A_Multi
-;BESC EQU SkyIII_30A_Main
-;BESC EQU SkyIII_30A_Tail
-;BESC EQU SkyIII_30A_Multi
 
 ;**** **** **** **** ****
 ; ESC selection statements
-IF BESC == XP_3A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (XP_3A.inc)			; Select XP 3A pinout
-ENDIF
-
-IF BESC == XP_3A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (XP_3A.inc)			; Select XP 3A pinout
-ENDIF
-
-IF BESC == XP_3A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (XP_3A.inc)			; Select XP 3A pinout
-ENDIF
-
-IF BESC == XP_7A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (XP_7A.inc)			; Select XP 7A pinout
-ENDIF
-
-IF BESC == XP_7A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (XP_7A.inc)			; Select XP 7A pinout
-ENDIF
-
-IF BESC == XP_7A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (XP_7A.inc)			; Select XP 7A pinout
-ENDIF
-
-IF BESC == XP_7A_Fast_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (XP_7A_Fast.inc)		; Select XP 7A Fast pinout
-ENDIF
-
-IF BESC == XP_7A_Fast_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (XP_7A_Fast.inc)		; Select XP 7A Fast pinout
-ENDIF
-
-IF BESC == XP_7A_Fast_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (XP_7A_Fast.inc)		; Select XP 7A Fast pinout
-ENDIF
-
-IF BESC == XP_12A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (XP_12A.inc)			; Select XP 12A pinout
-ENDIF
-
-IF BESC == XP_12A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (XP_12A.inc)			; Select XP 12A pinout
-ENDIF
-
-IF BESC == XP_12A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (XP_12A.inc)			; Select XP 12A pinout
-ENDIF
-
-IF BESC == XP_18A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (XP_18A.inc)			; Select XP 18A pinout
-ENDIF
-
-IF BESC == XP_18A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (XP_18A.inc)			; Select XP 18A pinout
-ENDIF
-
-IF BESC == XP_18A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (XP_18A.inc)			; Select XP 18A pinout
-ENDIF
-
-IF BESC == XP_25A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (XP_25A.inc)			; Select XP 25A pinout
-ENDIF
-
-IF BESC == XP_25A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (XP_25A.inc)			; Select XP 25A pinout
-ENDIF
-
-IF BESC == XP_25A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (XP_25A.inc)			; Select XP 25A pinout
-ENDIF
-
-IF BESC == XP_35A_SW_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (XP_35A_SW.inc)			; Select XP 35A SW pinout
-ENDIF
-
-IF BESC == XP_35A_SW_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (XP_35A_SW.inc)			; Select XP 35A SW pinout
-ENDIF
-
-IF BESC == XP_35A_SW_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (XP_35A_SW.inc)			; Select XP 35A SW pinout
-ENDIF
-
 IF BESC == DP_3A_Main
 MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
 $include (DP_3A.inc)			; Select DP 3A pinout
@@ -685,51 +81,6 @@ ENDIF
 IF BESC == DP_3A_Multi
 MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
 $include (DP_3A.inc)			; Select DP 3A pinout
-ENDIF
-
-IF BESC == Supermicro_3p5A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Supermicro_3p5A.inc)	; Select Supermicro 3.5A pinout
-ENDIF
-
-IF BESC == Supermicro_3p5A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Supermicro_3p5A.inc)	; Select Supermicro 3.5A pinout
-ENDIF
-
-IF BESC == Supermicro_3p5A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Supermicro_3p5A.inc)	; Select Supermicro 3.5A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_6A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Turnigy_Plush_6A.inc)	; Select Turnigy Plush 6A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_6A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Turnigy_Plush_6A.inc)	; Select Turnigy Plush 6A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_6A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Turnigy_Plush_6A.inc)	; Select Turnigy Plush 6A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_10A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Turnigy_Plush_10A.inc)	; Select Turnigy Plush 10A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_10A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Turnigy_Plush_10A.inc)	; Select Turnigy Plush 10A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_10A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Turnigy_Plush_10A.inc)	; Select Turnigy Plush 10A pinout
 ENDIF
 
 IF BESC == Turnigy_Plush_12A_Main
@@ -747,201 +98,6 @@ MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
 $include (Turnigy_Plush_12A.inc)	; Select Turnigy Plush 12A pinout
 ENDIF
 
-IF BESC == Turnigy_Plush_18A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Turnigy_Plush_18A.inc)	; Select Turnigy Plush 18A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_18A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Turnigy_Plush_18A.inc)	; Select Turnigy Plush 18A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_18A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Turnigy_Plush_18A.inc)	; Select Turnigy Plush 18A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_25A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Turnigy_Plush_25A.inc)	; Select Turnigy Plush 25A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_25A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Turnigy_Plush_25A.inc)	; Select Turnigy Plush 25A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_25A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Turnigy_Plush_25A.inc)	; Select Turnigy Plush 25A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_30A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Turnigy_Plush_30A.inc)	; Select Turnigy Plush 30A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_30A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Turnigy_Plush_30A.inc)	; Select Turnigy Plush 30A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_30A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Turnigy_Plush_30A.inc)	; Select Turnigy Plush 30A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_40A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Turnigy_Plush_40A.inc)	; Select Turnigy Plush 40A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_40A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Turnigy_Plush_40A.inc)	; Select Turnigy Plush 40A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_40A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Turnigy_Plush_40A.inc)	; Select Turnigy Plush 40A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_60A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Turnigy_Plush_60A.inc)	; Select Turnigy Plush 60A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_60A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Turnigy_Plush_60A.inc)	; Select Turnigy Plush 60A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_60A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Turnigy_Plush_60A.inc)	; Select Turnigy Plush 60A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_80A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Turnigy_Plush_80A.inc)	; Select Turnigy Plush 80A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_80A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Turnigy_Plush_80A.inc)	; Select Turnigy Plush 80A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_80A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Turnigy_Plush_80A.inc)	; Select Turnigy Plush 80A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_Nfet_18A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Turnigy_Plush_Nfet_18A.inc)	; Select Turnigy Plush Nfet 18A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_Nfet_18A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Turnigy_Plush_Nfet_18A.inc)	; Select Turnigy Plush Nfet 18A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_Nfet_18A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Turnigy_Plush_Nfet_18A.inc)	; Select Turnigy Plush Nfet 18A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_Nfet_25A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Turnigy_Plush_Nfet_25A.inc)	; Select Turnigy Plush Nfet 25A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_Nfet_25A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Turnigy_Plush_Nfet_25A.inc)	; Select Turnigy Plush Nfet 25A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_Nfet_25A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Turnigy_Plush_Nfet_25A.inc)	; Select Turnigy Plush Nfet 25A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_Nfet_30A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Turnigy_Plush_Nfet_30A.inc)	; Select Turnigy Plush Nfet 30A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_Nfet_30A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Turnigy_Plush_Nfet_30A.inc)	; Select Turnigy Plush Nfet 30A pinout
-ENDIF
-
-IF BESC == Turnigy_Plush_Nfet_30A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Turnigy_Plush_Nfet_30A.inc)	; Select Turnigy Plush Nfet 30A pinout
-ENDIF
-
-IF BESC == Turnigy_AE_20A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Turnigy_AE_20A.inc)		; Select Turnigy AE-20A pinout
-ENDIF
-
-IF BESC == Turnigy_AE_20A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Turnigy_AE_20A.inc)		; Select Turnigy AE-20A pinout
-ENDIF
-
-IF BESC == Turnigy_AE_20A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Turnigy_AE_20A.inc)		; Select Turnigy AE-20A pinout
-ENDIF
-
-IF BESC == Turnigy_AE_25A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Turnigy_AE_25A.inc)		; Select Turnigy AE-25A pinout
-ENDIF
-
-IF BESC == Turnigy_AE_25A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Turnigy_AE_25A.inc)		; Select Turnigy AE-25A pinout
-ENDIF
-
-IF BESC == Turnigy_AE_25A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Turnigy_AE_25A.inc)		; Select Turnigy AE-25A pinout
-ENDIF
-
-IF BESC == Turnigy_AE_30A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Turnigy_AE_30A.inc)		; Select Turnigy AE-30A pinout
-ENDIF
-
-IF BESC == Turnigy_AE_30A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Turnigy_AE_30A.inc)		; Select Turnigy AE-30A pinout
-ENDIF
-
-IF BESC == Turnigy_AE_30A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Turnigy_AE_30A.inc)		; Select Turnigy AE-30A pinout
-ENDIF
-
-IF BESC == Turnigy_AE_45A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Turnigy_AE_45A.inc)		; Select Turnigy AE-45A pinout
-ENDIF
-
-IF BESC == Turnigy_AE_45A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Turnigy_AE_45A.inc)		; Select Turnigy AE-45A pinout
-ENDIF
-
-IF BESC == Turnigy_AE_45A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Turnigy_AE_45A.inc)		; Select Turnigy AE-45A pinout
-ENDIF
-
 IF BESC == Turnigy_KForce_40A_Main
 MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
 $include (Turnigy_KForce_40A.inc)	; Select Turnigy KForce 40A pinout
@@ -955,66 +111,6 @@ ENDIF
 IF BESC == Turnigy_KForce_40A_Multi
 MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
 $include (Turnigy_KForce_40A.inc)	; Select Turnigy KForce 40A pinout
-ENDIF
-
-IF BESC == Turnigy_KForce_70A_HV_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Turnigy_KForce_70A_HV.inc)	; Select Turnigy KForce 70A HV pinout
-ENDIF
-
-IF BESC == Turnigy_KForce_70A_HV_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Turnigy_KForce_70A_HV.inc)	; Select Turnigy KForce 70A HV pinout
-ENDIF
-
-IF BESC == Turnigy_KForce_70A_HV_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Turnigy_KForce_70A_HV.inc)	; Select Turnigy KForce 70A HV pinout
-ENDIF
-
-IF BESC == Turnigy_KForce_120A_HV_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Turnigy_KForce_120A_HV.inc)	; Select Turnigy KForce 120A HV pinout
-ENDIF
-
-IF BESC == Turnigy_KForce_120A_HV_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Turnigy_KForce_120A_HV.inc)	; Select Turnigy KForce 120A HV pinout
-ENDIF
-
-IF BESC == Turnigy_KForce_120A_HV_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Turnigy_KForce_120A_HV.inc)	; Select Turnigy KForce 120A HV pinout
-ENDIF
-
-IF BESC == Turnigy_KForce_120A_HV_v2_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Turnigy_KForce_120A_HV_v2.inc); Select Turnigy KForce 120A HV v2 pinout
-ENDIF
-
-IF BESC == Turnigy_KForce_120A_HV_v2_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Turnigy_KForce_120A_HV_v2.inc); Select Turnigy KForce 120A HV v2 pinout
-ENDIF
-
-IF BESC == Turnigy_KForce_120A_HV_v2_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Turnigy_KForce_120A_HV_v2.inc); Select Turnigy KForce 120A HV v2 pinout
-ENDIF
-
-IF BESC == Skywalker_12A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Skywalker_12A.inc)		; Select Skywalker 12A pinout
-ENDIF
-
-IF BESC == Skywalker_12A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Skywalker_12A.inc)		; Select Skywalker 12A pinout
-ENDIF
-
-IF BESC == Skywalker_12A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Skywalker_12A.inc)		; Select Skywalker 12A pinout
 ENDIF
 
 IF BESC == Skywalker_20A_Main
@@ -1047,306 +143,6 @@ MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
 $include (Skywalker_40A.inc)		; Select Skywalker 40A pinout
 ENDIF
 
-IF BESC == HiModel_Cool_22A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (HiModel_Cool_22A.inc)	; Select HiModel Cool 22A pinout
-ENDIF
-
-IF BESC == HiModel_Cool_22A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (HiModel_Cool_22A.inc)	; Select HiModel Cool 22A pinout
-ENDIF
-
-IF BESC == HiModel_Cool_22A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (HiModel_Cool_22A.inc)	; Select HiModel Cool 22A pinout
-ENDIF
-
-IF BESC == HiModel_Cool_33A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (HiModel_Cool_33A.inc)	; Select HiModel Cool 33A pinout
-ENDIF
-
-IF BESC == HiModel_Cool_33A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (HiModel_Cool_33A.inc)	; Select HiModel Cool 33A pinout
-ENDIF
-
-IF BESC == HiModel_Cool_33A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (HiModel_Cool_33A.inc)	; Select HiModel Cool 33A pinout
-ENDIF
-
-IF BESC == HiModel_Cool_41A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (HiModel_Cool_41A.inc)	; Select HiModel Cool 41A pinout
-ENDIF
-
-IF BESC == HiModel_Cool_41A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (HiModel_Cool_41A.inc)	; Select HiModel Cool 41A pinout
-ENDIF
-
-IF BESC == HiModel_Cool_41A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (HiModel_Cool_41A.inc)	; Select HiModel Cool 41A pinout
-ENDIF
-
-IF BESC == RCTimer_6A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (RCTimer_6A.inc)		; Select RC Timer 6A pinout
-ENDIF
-
-IF BESC == RCTimer_6A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (RCTimer_6A.inc)		; Select RC Timer 6A pinout
-ENDIF
-
-IF BESC == RCTimer_6A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (RCTimer_6A.inc)		; Select RC Timer 6A pinout
-ENDIF
-
-IF BESC == Align_RCE_BL15X_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Align_RCE_BL15X.inc)	; Select Align RCE-BL15X pinout
-ENDIF
-
-IF BESC == Align_RCE_BL15X_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Align_RCE_BL15X.inc)	; Select Align RCE-BL15X pinout
-ENDIF
-
-IF BESC == Align_RCE_BL15X_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Align_RCE_BL15X.inc)	; Select Align RCE-BL15X pinout
-ENDIF
-
-IF BESC == Align_RCE_BL15P_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Align_RCE_BL15P.inc)	; Select Align RCE-BL15P pinout
-ENDIF
-
-IF BESC == Align_RCE_BL15P_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Align_RCE_BL15P.inc)	; Select Align RCE-BL15P pinout
-ENDIF
-
-IF BESC == Align_RCE_BL15P_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Align_RCE_BL15P.inc)	; Select Align RCE-BL15P pinout
-ENDIF
-
-IF BESC == Align_RCE_BL35X_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Align_RCE_BL35X.inc)	; Select Align RCE-BL35X pinout
-ENDIF
-
-IF BESC == Align_RCE_BL35X_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Align_RCE_BL35X.inc)	; Select Align RCE-BL35X pinout
-ENDIF
-
-IF BESC == Align_RCE_BL35X_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Align_RCE_BL35X.inc)	; Select Align RCE-BL35X pinout
-ENDIF
-
-IF BESC == Align_RCE_BL35P_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Align_RCE_BL35P.inc)	; Select Align RCE-BL35P pinout
-ENDIF
-
-IF BESC == Align_RCE_BL35P_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Align_RCE_BL35P.inc)	; Select Align RCE-BL35P pinout
-ENDIF
-
-IF BESC == Align_RCE_BL35P_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Align_RCE_BL35P.inc)	; Select Align RCE-BL35P pinout
-ENDIF
-
-IF BESC == Gaui_GE_183_18A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Gaui_GE_183_18A.inc)	; Select Gaui GE-183 18A pinout
-ENDIF
-
-IF BESC == Gaui_GE_183_18A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Gaui_GE_183_18A.inc)	; Select Gaui GE-183 18A pinout
-ENDIF
-
-IF BESC == Gaui_GE_183_18A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Gaui_GE_183_18A.inc)	; Select Gaui GE-183 18A pinout
-ENDIF
-
-IF BESC == H_King_10A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (H_King_10A.inc)		; Select H-King 10A pinout
-ENDIF
-
-IF BESC == H_King_10A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (H_King_10A.inc)		; Select H-King 10A pinout
-ENDIF
-
-IF BESC == H_King_10A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (H_King_10A.inc)		; Select H-King 10A pinout
-ENDIF
-
-IF BESC == H_King_20A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (H_King_20A.inc)		; Select H-King 20A pinout
-ENDIF
-
-IF BESC == H_King_20A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (H_King_20A.inc)		; Select H-King 20A pinout
-ENDIF
-
-IF BESC == H_King_20A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (H_King_20A.inc)		; Select H-King 20A pinout
-ENDIF
-
-IF BESC == H_King_35A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (H_King_35A.inc)		; Select H-King 35A pinout
-ENDIF
-
-IF BESC == H_King_35A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (H_King_35A.inc)		; Select H-King 35A pinout
-ENDIF
-
-IF BESC == H_King_35A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (H_King_35A.inc)		; Select H-King 35A pinout
-ENDIF
-
-IF BESC == H_King_50A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (H_King_50A.inc)		; Select H-King 50A pinout
-ENDIF
-
-IF BESC == H_King_50A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (H_King_50A.inc)		; Select H-King 50A pinout
-ENDIF
-
-IF BESC == H_King_50A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (H_King_50A.inc)		; Select H-King 50A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_12A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Polaris_Thunder_12A.inc)	; Select Polaris Thunder 12A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_12A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Polaris_Thunder_12A.inc)	; Select Polaris Thunder 12A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_12A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Polaris_Thunder_12A.inc)	; Select Polaris Thunder 12A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_20A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Polaris_Thunder_20A.inc)	; Select Polaris Thunder 20A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_20A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Polaris_Thunder_20A.inc)	; Select Polaris Thunder 20A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_20A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Polaris_Thunder_20A.inc)	; Select Polaris Thunder 20A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_30A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Polaris_Thunder_30A.inc)	; Select Polaris Thunder 30A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_30A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Polaris_Thunder_30A.inc)	; Select Polaris Thunder 30A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_30A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Polaris_Thunder_30A.inc)	; Select Polaris Thunder 30A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_40A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Polaris_Thunder_40A.inc)	; Select Polaris Thunder 40A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_40A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Polaris_Thunder_40A.inc)	; Select Polaris Thunder 40A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_40A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Polaris_Thunder_40A.inc)	; Select Polaris Thunder 40A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_60A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Polaris_Thunder_60A.inc)	; Select Polaris Thunder 60A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_60A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Polaris_Thunder_60A.inc)	; Select Polaris Thunder 60A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_60A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Polaris_Thunder_60A.inc)	; Select Polaris Thunder 60A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_80A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Polaris_Thunder_80A.inc)	; Select Polaris Thunder 80A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_80A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Polaris_Thunder_80A.inc)	; Select Polaris Thunder 80A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_80A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Polaris_Thunder_80A.inc)	; Select Polaris Thunder 80A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_100A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Polaris_Thunder_100A.inc); Select Polaris Thunder 100A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_100A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Polaris_Thunder_100A.inc); Select Polaris Thunder 100A pinout
-ENDIF
-
-IF BESC == Polaris_Thunder_100A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Polaris_Thunder_100A.inc); Select Polaris Thunder 100A pinout
-ENDIF
-
 IF BESC == Platinum_Pro_30A_Main
 MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
 $include (Platinum_Pro_30A.inc)	; Select Platinum Pro 30A pinout
@@ -1362,50 +158,6 @@ MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
 $include (Platinum_Pro_30A.inc)	; Select Platinum Pro 30A pinout
 ENDIF
 
-IF BESC == EAZY_3Av2_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (EAZY_3Av2.inc)			; Select Platinum Pro 30A pinout
-ENDIF
-
-IF BESC == EAZY_3Av2_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (EAZY_3Av2.inc)			; Select Platinum Pro 30A pinout
-ENDIF
-
-IF BESC == EAZY_3Av2_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (EAZY_3Av2.inc)			; Select Platinum Pro 30A pinout
-ENDIF
-
-IF BESC == Tarot_30A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (Tarot_30A.inc)			; Select Tarot 30A pinout
-ENDIF
-
-IF BESC == Tarot_30A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (Tarot_30A.inc)			; Select Tarot 30A pinout
-ENDIF
-
-IF BESC == Tarot_30A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (Tarot_30A.inc)			; Select Tarot 30A pinout
-ENDIF
-
-IF BESC == SkyIII_30A_Main
-MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
-$include (SkyIII_30A.inc)		; Select SkyIII 30A pinout
-ENDIF
-
-IF BESC == SkyIII_30A_Tail
-MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
-$include (SkyIII_30A.inc)		; Select SkyIII 30A pinout
-ENDIF
-
-IF BESC == SkyIII_30A_Multi
-MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
-$include (SkyIII_30A.inc)		; Select SkyIII 30A pinout
-ENDIF
 
 ;**** **** **** **** ****
 ; TX programming defaults
@@ -1474,15 +226,15 @@ ENDIF
 DEFAULT_PGM_MULTI_DEMAG_COMP 		EQU 2 	; 1=Disabled	2=Low		3=High
 DEFAULT_PGM_MULTI_DIRECTION		EQU 1 	; 1=Normal 	2=Reversed	3=Bidirectional
 DEFAULT_PGM_MULTI_RCP_PWM_POL 	EQU 1 	; 1=Positive 	2=Negative
-DEFAULT_PGM_MULTI_BEEP_STRENGTH	EQU 40	; Beep strength
+DEFAULT_PGM_MULTI_BEEP_STRENGTH	EQU 80	; Beep strength
 DEFAULT_PGM_MULTI_BEACON_STRENGTH	EQU 80	; Beacon strength
-DEFAULT_PGM_MULTI_BEACON_DELAY	EQU 4 	; 1=1m		2=2m			3=5m			4=10m		5=Infinite
+DEFAULT_PGM_MULTI_BEACON_DELAY	EQU 5 	; 1=1m		2=2m			3=5m			4=10m		5=Infinite
 ; Common
-DEFAULT_PGM_ENABLE_TX_PROGRAM 	EQU 1 	; 1=Enabled 	0=Disabled
-DEFAULT_PGM_PPM_MIN_THROTTLE		EQU 37	; 4*37+1000=1148
-DEFAULT_PGM_PPM_MAX_THROTTLE		EQU 208	; 4*208+1000=1832
-DEFAULT_PGM_PPM_CENTER_THROTTLE	EQU 122	; 4*122+1000=1488 (used in bidirectional mode)
-DEFAULT_PGM_BEC_VOLTAGE_HIGH		EQU 0	; 0=Low		1= High
+DEFAULT_PGM_ENABLE_TX_PROGRAM 	EQU 0 	; 1 = Enabled 	0 = Disabled
+DEFAULT_PGM_PPM_MIN_THROTTLE		EQU 3	; 4 * 3 + 1000 = 1012
+DEFAULT_PGM_PPM_MAX_THROTTLE		EQU 250	; 4 * 250 + 1000 = 2000
+DEFAULT_PGM_PPM_CENTER_THROTTLE	EQU 125	; 4 * 125 + 1000 = 1500 (用于双向模式)
+DEFAULT_PGM_BEC_VOLTAGE_HIGH		EQU 0	; 0 = Low		1 = High
 
 ;**** **** **** **** ****
 ; Constant definitions for main
@@ -1554,9 +306,16 @@ TEMP_CHECK_RATE	EQU 	8	; Number of adc conversions for each check of temperature
 
 ENDIF
 
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
+;
 ; Skypup 2015.05.25
+;
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
+;
 THR_DELTA			EQU	2	; 油门缓启动增量
 THR_SWITCH		EQU	0A0h	; 超过多大油门启动
+;
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 
 ;**** **** **** **** ****
 ; Temporary register definitions
@@ -2312,7 +1071,7 @@ t2_int_pulses_absent:
 
 t2_int_ppm_timeout_set:
 
-; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 ; 
 ; 对 RCP 信号处理
 ; 1 小于 1500us 最低油门
@@ -2324,7 +1083,7 @@ t2_int_ppm_timeout_set:
 ;	jnc skypup_01
 ;	mov	Temp1, #RCP_MIN
 ; skypup_01:
-; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 	mov	New_Rcp, Temp1				; Store new pulse length
 	setb	Flags2.RCP_UPDATED		 	; Set updated flag
 
@@ -2755,7 +1514,7 @@ pca_int_fail_minimum:
 	jnb	ACC.Rcp_In, ($+5)			; Is it high?
 	ajmp	pca_int_set_timeout			; Yes - set new timeout and exit
 
-; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 ; 
 ; 对 RCP 信号处理
 ; 1 小于 1500us 最低油门
@@ -2767,7 +1526,7 @@ pca_int_fail_minimum:
 ;	jnc skypup_02
 ;	mov	Temp1, #RCP_MIN
 ; skypup_02:
-; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 
 	mov	New_Rcp, Temp1				; Store new pulse length
 	ajmp	pca_int_limited			; Set new RC pulse, new timeout and exit
@@ -3158,7 +1917,7 @@ pca_int_check_legal_range:
 	mov	Temp1, #RCP_MAX
 
 pca_int_limited:
-; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 ; 
 ; 对 RCP 信号处理
 ; 1 小于 1500us 最低油门
@@ -3191,7 +1950,7 @@ skypup_04:
 	mov A, New_Rcp
 	mov Prev_Rcp, A
 
-; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 	; RC pulse value accepted
 	mov	New_Rcp, Temp1				; Store new pulse length
 	setb	Flags2.RCP_UPDATED		 	; Set updated flag
@@ -3279,6 +2038,20 @@ waitxms_m:	; Middle loop
  	djnz	ACC, $	; Inner loop (42.7us - 1024 cycles)
 	djnz	Temp1, waitxms_m
 	djnz	Temp2, waitxms_o
+	ret
+
+;**;**** **** **** **** **** **** **** **** **** **** **** **** ****
+;
+; Wait 1 second routine
+;
+; No assumptions
+;
+;**** **** **** **** **** **** **** **** **** **** **** **** ****
+wait1s:
+	mov	Temp5, #5
+wait1s_loop:
+	call wait200ms
+	djnz	Temp5, wait1s_loop
 	ret
 
 
@@ -5970,8 +4743,6 @@ clear_ram:
 	djnz Temp1, clear_ram	; Is A not zero? - jump
 	; Set default programmed parameters
 	call	set_default_parameters
-	; EEPROM 还原为默认值
-	call erase_and_store_all_in_eeprom
 	; Decode parameters
 	call	decode_parameters
 	; Decode governor gains
@@ -6167,7 +4938,7 @@ program_by_tx_entry_wait_pwm:
 	subb	A, #RCP_MAX			; At or above max?
 	jc	program_by_tx_entry_wait_pwm	; No - start over
 
-	jmp	program_by_tx			; Yes - enter programming mode
+	; jmp	program_by_tx			; Yes - enter programming mode
 
 	; PPM throttle calibration and tx program entry
 throttle_high_cal_start:
@@ -6198,8 +4969,8 @@ throttle_high_cal:
 	mov	Temp1, #Pgm_Ppm_Max_Throttle	; Store
 	mov	@Temp1, A			
 	call wait200ms				
-	call erase_and_store_all_in_eeprom	
-	call	success_beep
+	; call erase_and_store_all_in_eeprom	
+	; call	success_beep
 
 throttle_low_cal_start:
 	mov	Temp8, #10			; Set 3 seconds wait time
@@ -6230,8 +5001,8 @@ throttle_low_cal:
 	mov	Temp1, #Pgm_Ppm_Min_Throttle	; Store
 	mov	@Temp1, A			
 	call wait200ms				
-	call erase_and_store_all_in_eeprom	
-	call	success_beep_inverted
+	; call erase_and_store_all_in_eeprom	
+	; call	success_beep_inverted
 
 program_by_tx_entry_wait_ppm:	
 	call wait100ms
@@ -6241,7 +5012,7 @@ program_by_tx_entry_wait_ppm:
 	subb	A, #RCP_MAX			; At or above max?
 	jc	program_by_tx_entry_wait_ppm	; No - start over
 
-	jmp	program_by_tx			; Yes - enter programming mode
+	; jmp	program_by_tx			; Yes - enter programming mode
 
 program_by_tx_checked:
 	clr	C
@@ -6871,14 +5642,6 @@ IF MODE >= 1	; Tail or multi
 jmp_wait_for_power_on:
 	jmp	wait_for_power_on			; Go back to wait for power on
 ENDIF
-
-;**** **** **** **** **** **** **** **** **** **** **** **** ****
-
-$include (BLHeliTxPgm.inc)			; Include source code for programming the ESC with the TX
-
-;**** **** **** **** **** **** **** **** **** **** **** **** ****
-
-
 
 
 END
