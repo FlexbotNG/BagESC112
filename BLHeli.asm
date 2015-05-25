@@ -71,7 +71,7 @@ DEFAULT_PGM_MULTI_LOW_VOLTAGE_LIM	EQU 1 	; 1=Off		2=3.0V/c		3=3.1V/c		4=3.2V/c		
 DEFAULT_PGM_MULTI_STARTUP_RPM		EQU 1 	; 1=0.67		2=0.8 		3=1.00 		4=1.25 		5=1.5
 DEFAULT_PGM_MULTI_STARTUP_ACCEL	EQU 5 	; 1=0.4 		2=0.7 		3=1.0 		4=1.5 		5=2.3
 DEFAULT_PGM_MULTI_COMM_TIMING		EQU 3 	; 1=Low 		2=MediumLow 	3=Medium 		4=MediumHigh 	5=High
-DEFAULT_PGM_MULTI_THROTTLE_RATE	EQU 1	; 1=2		2=3			3=4			4=6 			5=8	 	6=12 	7=16	  8=24  9=32  10=48  11=64  12=128 13=255
+DEFAULT_PGM_MULTI_THROTTLE_RATE	EQU 13	; 1=2		2=3			3=4			4=6 			5=8	 	6=12 	7=16	  8=24  9=32  10=48  11=64  12=128 13=255
 DEFAULT_PGM_MULTI_DAMPING_FORCE	EQU 6 	; 1=VeryLow 	2=Low 		3=MediumLow 	4=MediumHigh 	5=High	6=Highest
 IF DAMPED_MODE_ENABLE == 1
 DEFAULT_PGM_MULTI_PWM_FREQ	 	EQU 1 	; 1=High 		2=Low 		3=DampedLight  4=Damped 	
@@ -115,6 +115,10 @@ COMM_TIME_MIN		EQU 	1	; Minimum time (in us) for commutation wait
 TEMP_CHECK_RATE	EQU 	8	; Number of adc conversions for each check of temperature (the other conversions are used for voltage)
 
 ENDIF
+
+; Skypup 2015.05.25
+THR_DELTA			EQU	2	; 油门缓启动增量
+THR_SWITCH		EQU	0A0h	; 超过多大油门启动
 
 ;**** **** **** **** ****
 ; Temporary register definitions
@@ -268,6 +272,12 @@ Beep_Strength:				DS	1		; Strength of beeps
 Tx_Pgm_Func_No:			DS	1		; Function number when doing programming by tx
 Tx_Pgm_Paraval_No:			DS	1		; Parameter value number when doing programming by tx
 Tx_Pgm_Beep_No:			DS	1		; Beep number when doing programming by tx
+
+; Skypup 2015.05.25
+Prev_Rcp:					DS	1		; 上一次输出的 New_Rcp 值
+Run_Count_L:				DS	1		; 运行循环计数低位
+Run_Count_H:				DS	1		; 运行循环计数高位
+Temp_Skypup:				DS	1		; 临时变量
 
 ; Indirect addressing data segment. The variables below must be in this sequence
 ISEG AT 080h					
@@ -1011,15 +1021,15 @@ ENDIF
 	jc	t2_int_set_current_pwm		; No - proceed
 
 	; 缓启动
-	; mov	Temp1, #Pgm_Throttle_Rate_Decoded		
-	mov	Temp1, #1
-	; subb	A, @Temp1					; Is difference larger than throttle change rate?
-	subb	A, Temp1				; Is difference larger than throttle change rate?
+	mov	Temp1, #Pgm_Throttle_Rate_Decoded		
+	;mov	Temp1, #1
+	subb	A, @Temp1					; Is difference larger than throttle change rate?
+	;subb	A, Temp1				; Is difference larger than throttle change rate?
 	jc	t2_int_set_current_pwm		; No - proceed
 
 	mov	A, Current_Pwm				; Increase current pwm by throttle change rate
-	; add	A, @Temp1
-	add	A, Temp1
+	add	A, @Temp1
+	; add	A, Temp1
 	mov	Current_Pwm, A
 	jnc	t2_int_current_pwm_done		; Is result above max?
 
@@ -1718,10 +1728,31 @@ pca_int_limited:
 ; 
 	clr C
 	mov A, Temp1
-	subb A, #80h
-	jnc skypup_03
+	subb A, #THR_SWITCH				; Temp1 - THR_SWITCH < 0 ?
+	jnc skypup_03					; No 跳转
 	mov	Temp1, #RCP_MIN
 skypup_03:
+
+	clr C
+	mov A, Temp1
+	subb A, Prev_Rcp				; 上一个 Rcp > 当前 Rcp ?
+	jc skypup_04					; No
+
+	subb A, #THR_DELTA				; 油门缓启动增量 > Rcp 增加值 ?
+	jc skypup_04					; No
+
+	clr C						; 这一句能否去掉? Skypup 2015.05.25
+	mov A, Prev_Rcp
+	add A, #THR_DELTA
+	mov Temp1, A
+	jnc skypup_04					; 没有发生进位溢出
+
+	mov Temp1, #0FFh	
+	
+skypup_04:
+	mov A, New_Rcp
+	mov Prev_Rcp, A
+
 ; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
 	; RC pulse value accepted
 	mov	New_Rcp, Temp1				; Store new pulse length
@@ -4624,9 +4655,14 @@ validate_rcp_start:
 
 	; Beep arm sequence start signal
 	clr 	EA							; Disable all interrupts
-	call beep_f1						; Signal that RC pulse is ready
 	call beep_f1
+	call wait30ms
 	call beep_f1
+	call wait30ms
+	call beep_f2
+	call wait30ms
+	call beep_f2
+	call wait30ms
 	setb	EA							; Enable all interrupts
 	call wait200ms	
 
@@ -4789,9 +4825,14 @@ arm_target_updated:
 arm_end_beep:
 	; Beep arm sequence end signal
 	clr 	EA					; Disable all interrupts
-	call beep_f4				; Signal that rcpulse is ready
 	call beep_f4
+	call wait30ms
 	call beep_f4
+	call wait30ms
+	call beep_f3
+	call wait30ms
+	call beep_f3
+	call wait30ms
 	setb	EA					; Enable all interrupts
 	call wait200ms
 
