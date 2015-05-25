@@ -432,7 +432,7 @@ ENDIF
 Eep_Dummy:				DB	0FFh							; EEPROM address for safety reason
 
 CSEG AT 1A60h
-Eep_Name:					DB	"                "				; Name tag (16 Bytes)
+Eep_Name:					DB	"org.skypup.esc.b"				; Name tag (16 Bytes)
 
 ;**** **** **** **** ****
         		Interrupt_Table_Definition		; SiLabs interrupts
@@ -861,7 +861,22 @@ t2_int_pulses_absent:
 
 	mov	Rcp_Timeout_Cnt, #RCP_TIMEOUT	; For PWM, set timeout count to start value
 
+
 t2_int_ppm_timeout_set:
+
+; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
+; 
+; 对 RCP 信号处理
+; 1 小于 1500us 最低油门
+; 2 大于 1500us 正常处理
+; 
+;	clr C
+;	mov A, Temp1
+;	subb A, #80h
+;	jnc skypup_01
+;	mov	Temp1, #RCP_MIN
+; skypup_01:
+; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
 	mov	New_Rcp, Temp1				; Store new pulse length
 	setb	Flags2.RCP_UPDATED		 	; Set updated flag
 
@@ -1292,6 +1307,20 @@ pca_int_fail_minimum:
 	jnb	ACC.Rcp_In, ($+5)			; Is it high?
 	ajmp	pca_int_set_timeout			; Yes - set new timeout and exit
 
+; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
+; 
+; 对 RCP 信号处理
+; 1 小于 1500us 最低油门
+; 2 大于 1500us 正常处理
+; 
+;	clr C
+;	mov A, Temp1
+;	subb A, #80h
+;	jnc skypup_02
+;	mov	Temp1, #RCP_MIN
+; skypup_02:
+; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
+
 	mov	New_Rcp, Temp1				; Store new pulse length
 	ajmp	pca_int_limited			; Set new RC pulse, new timeout and exit
 
@@ -1681,6 +1710,19 @@ pca_int_check_legal_range:
 	mov	Temp1, #RCP_MAX
 
 pca_int_limited:
+; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
+; 
+; 对 RCP 信号处理
+; 1 小于 1500us 最低油门
+; 2 大于 1500us 正常处理
+; 
+	clr C
+	mov A, Temp1
+	subb A, #80h
+	jnc skypup_03
+	mov	Temp1, #RCP_MIN
+skypup_03:
+; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
 	; RC pulse value accepted
 	mov	New_Rcp, Temp1				; Store new pulse length
 	setb	Flags2.RCP_UPDATED		 	; Set updated flag

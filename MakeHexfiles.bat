@@ -5,6 +5,7 @@
 Break ON
 REM @pause
 
+DEL BLHeli.#?
 rem ***** adapt settings to your enviroment ****
 DEL Output\Hex\*.* /Q
 RMDIR Output\Hex
@@ -36,8 +37,12 @@ SET BESC=159
 %RaisonancePath%\Ride\bin\ma51.exe "BLHeli.asm" SET(BESC=%BESC%) OBJECT(Output\%BESCTYPE%_%Revision%.OBJ) DEBUG EP QUIET PIN(%SilabsPath%\MCU\Inc;%RaisonancePath%\Ride\inc;%RaisonancePath%\Ride\inc\51) >> MakeHex_Result.txt 
 %RaisonancePath%\Ride\bin\lx51.exe "Output\%BESCTYPE%_%Revision%.OBJ"  TO(Output\%BESCTYPE%_%Revision%.OMF) RS(256) PL(68) PW(78) OUTPUTSUMMARY LIBPATH(%RaisonancePath%\Ride\lib\51) >> MakeHex_Result.txt 
 %RaisonancePath%\Ride\bin\oh51.exe "Output\%BESCTYPE%_%Revision%.OMF" >> MakeHex_Result.txt
-copy "Output\%BESCTYPE%_%Revision%.HEX" "Output\Hex\*.*" > nul
-del "Output\%BESCTYPE%_%Revision%.HEX" > nul
+COPY "Output\%BESCTYPE%_%Revision%.HEX" ".\*.*"  > nul
+DEL "Output\%BESCTYPE%_%Revision%.HEX"           > nul
+DEL Output\Hex\*.* /Q                            > nul
+RMDIR Output\Hex                                 > nul
+DEL Output\*.* /Q                                > nul
+RMDIR Output                                     > nul
 @ECHO *****************************************************  >> MakeHex_Result.txt
 @ECHO %BESCTYPE%
 
