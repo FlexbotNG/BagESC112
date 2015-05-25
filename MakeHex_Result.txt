@@ -1,20 +1,20 @@
 ***** Result of Batch file for BlHeli (from 4712) v.1.1       ***** 
 Revision: Rev11_2 
 Path for Silabs IDE: C:\SiLabs 
-Path for Raisonance IDE: C:\Raisonance 
+Path for Raisonance IDE: C:\Progra~1\Raisonance 
 Start compile 
  
 *****************************************************  
 Skywalker_20A_MULTI  
 *****************************************************  
-MS-DOS MCS-51 MACRO ASSEMBLER MA51 V06.16.13.326 Hobby version (8 Kb code limited)
+MS-DOS MCS-51 MACRO ASSEMBLER MA51 V06.16.13.326 Demo period is over. Please register
 Copyright (c) KEOLABS S.A.S. 1987-2013. All rights reserved. Raisonance is a KEOLABS brand.
 
 ASSEMBLY COMPLETE.   0 WARNING(S)   0 ERROR(S)
-MS-DOS MCS-51 CODE BANKING LINKER/LOCATOR LX51 V06.16.13.326 Hobby version (8 Kb code limited)
+MS-DOS MCS-51 CODE BANKING LINKER/LOCATOR LX51 V06.16.13.326 Demo period is over. Please register
 Copyright (c) KEOLABS S.A.S. 1987-2013. All rights reserved. Raisonance is a KEOLABS brand.
 
-<Memory usage: code=6863,  internal data=178.0,  xdata/pdata=0>
+<Memory usage: code=6833,  internal data=178.0,  xdata/pdata=0>
 
 LINK/LOCATE RUN COMPLETE,  NO ERROR FOUND.
 
@@ -27,14 +27,14 @@ GENERATING EXTENDED HEX FILE: OUTPUT\SKYWALKER_20A_MULTI_REV11_2.HEX
 *****************************************************  
 Skywalker_40A_MULTI  
 *****************************************************  
-MS-DOS MCS-51 MACRO ASSEMBLER MA51 V06.16.13.326 Hobby version (8 Kb code limited)
+MS-DOS MCS-51 MACRO ASSEMBLER MA51 V06.16.13.326 Demo period is over. Please register
 Copyright (c) KEOLABS S.A.S. 1987-2013. All rights reserved. Raisonance is a KEOLABS brand.
 
 ASSEMBLY COMPLETE.   0 WARNING(S)   0 ERROR(S)
-MS-DOS MCS-51 CODE BANKING LINKER/LOCATOR LX51 V06.16.13.326 Hobby version (8 Kb code limited)
+MS-DOS MCS-51 CODE BANKING LINKER/LOCATOR LX51 V06.16.13.326 Demo period is over. Please register
 Copyright (c) KEOLABS S.A.S. 1987-2013. All rights reserved. Raisonance is a KEOLABS brand.
 
-<Memory usage: code=6863,  internal data=178.0,  xdata/pdata=0>
+<Memory usage: code=6833,  internal data=178.0,  xdata/pdata=0>
 
 LINK/LOCATE RUN COMPLETE,  NO ERROR FOUND.
 
@@ -47,14 +47,14 @@ GENERATING EXTENDED HEX FILE: OUTPUT\SKYWALKER_40A_MULTI_REV11_2.HEX
 *****************************************************  
 Platinum_Pro_30A_MULTI  
 *****************************************************  
-MS-DOS MCS-51 MACRO ASSEMBLER MA51 V06.16.13.326 Hobby version (8 Kb code limited)
+MS-DOS MCS-51 MACRO ASSEMBLER MA51 V06.16.13.326 Demo period is over. Please register
 Copyright (c) KEOLABS S.A.S. 1987-2013. All rights reserved. Raisonance is a KEOLABS brand.
 
 ASSEMBLY COMPLETE.   0 WARNING(S)   0 ERROR(S)
-MS-DOS MCS-51 CODE BANKING LINKER/LOCATOR LX51 V06.16.13.326 Hobby version (8 Kb code limited)
+MS-DOS MCS-51 CODE BANKING LINKER/LOCATOR LX51 V06.16.13.326 Demo period is over. Please register
 Copyright (c) KEOLABS S.A.S. 1987-2013. All rights reserved. Raisonance is a KEOLABS brand.
 
-<Memory usage: code=6788,  internal data=178.0,  xdata/pdata=0>
+<Memory usage: code=6758,  internal data=178.0,  xdata/pdata=0>
 
 LINK/LOCATE RUN COMPLETE,  NO ERROR FOUND.
 

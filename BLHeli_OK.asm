@@ -1554,10 +1554,6 @@ TEMP_CHECK_RATE	EQU 	8	; Number of adc conversions for each check of temperature
 
 ENDIF
 
-; Skypup 2015.05.25
-THR_DELTA			EQU	2	; ”Õ√≈ª∫∆Ù∂Ø‘ˆ¡ø
-THR_SWITCH		EQU	0A0h	; ≥¨π˝∂‡¥Û”Õ√≈∆Ù∂Ø
-
 ;**** **** **** **** ****
 ; Temporary register definitions
 Temp1		EQU	R0
@@ -1710,12 +1706,6 @@ Beep_Strength:				DS	1		; Strength of beeps
 Tx_Pgm_Func_No:			DS	1		; Function number when doing programming by tx
 Tx_Pgm_Paraval_No:			DS	1		; Parameter value number when doing programming by tx
 Tx_Pgm_Beep_No:			DS	1		; Beep number when doing programming by tx
-
-; Skypup 2015.05.25
-Prev_Rcp:					DS	1		; …œ“ª¥Œ ‰≥ˆµƒ New_Rcp ÷µ
-Run_Count_L:				DS	1		; ‘À––—≠ª∑º∆ ˝µÕŒª
-Run_Count_H:				DS	1		; ‘À––—≠ª∑º∆ ˝∏ﬂŒª
-Temp_Skypup:				DS	1		; ¡Ÿ ±±‰¡ø
 
 ; Indirect addressing data segment. The variables below must be in this sequence
 ISEG AT 080h					
@@ -1880,7 +1870,7 @@ ENDIF
 Eep_Dummy:				DB	0FFh							; EEPROM address for safety reason
 
 CSEG AT 1A60h
-Eep_Name:					DB	"org.skypup.esc.b"				; Name tag (16 Bytes)
+Eep_Name:					DB	"                "				; Name tag (16 Bytes)
 
 ;**** **** **** **** ****
         		Interrupt_Table_Definition		; SiLabs interrupts
@@ -2309,22 +2299,7 @@ t2_int_pulses_absent:
 
 	mov	Rcp_Timeout_Cnt, #RCP_TIMEOUT	; For PWM, set timeout count to start value
 
-
 t2_int_ppm_timeout_set:
-
-; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
-; 
-; ∂‘ RCP –≈∫≈¥¶¿Ì
-; 1 –°”⁄ 1500us ◊ÓµÕ”Õ√≈
-; 2 ¥Û”⁄ 1500us ’˝≥£¥¶¿Ì
-; 
-;	clr C
-;	mov A, Temp1
-;	subb A, #80h
-;	jnc skypup_01
-;	mov	Temp1, #RCP_MIN
-; skypup_01:
-; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
 	mov	New_Rcp, Temp1				; Store new pulse length
 	setb	Flags2.RCP_UPDATED		 	; Set updated flag
 
@@ -2454,20 +2429,16 @@ ENDIF
 
 	; Update current pwm, with limited throttle change rate
 	clr	C
-	mov	A, Requested_Pwm	 
+	mov	A, Requested_Pwm	
 	subb	A, Current_Pwm				; Is requested pwm larger than current pwm?
 	jc	t2_int_set_current_pwm		; No - proceed
 
-	; ª∫∆Ù∂Ø
 	mov	Temp1, #Pgm_Throttle_Rate_Decoded		
-	;mov	Temp1, #1
 	subb	A, @Temp1					; Is difference larger than throttle change rate?
-	;subb	A, Temp1				; Is difference larger than throttle change rate?
 	jc	t2_int_set_current_pwm		; No - proceed
 
 	mov	A, Current_Pwm				; Increase current pwm by throttle change rate
 	add	A, @Temp1
-	; add	A, Temp1
 	mov	Current_Pwm, A
 	jnc	t2_int_current_pwm_done		; Is result above max?
 
@@ -2754,20 +2725,6 @@ pca_int_fail_minimum:
 	Read_Rcp_Int 					; Test RC signal level again
 	jnb	ACC.Rcp_In, ($+5)			; Is it high?
 	ajmp	pca_int_set_timeout			; Yes - set new timeout and exit
-
-; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
-; 
-; ∂‘ RCP –≈∫≈¥¶¿Ì
-; 1 –°”⁄ 1500us ◊ÓµÕ”Õ√≈
-; 2 ¥Û”⁄ 1500us ’˝≥£¥¶¿Ì
-; 
-;	clr C
-;	mov A, Temp1
-;	subb A, #80h
-;	jnc skypup_02
-;	mov	Temp1, #RCP_MIN
-; skypup_02:
-; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
 
 	mov	New_Rcp, Temp1				; Store new pulse length
 	ajmp	pca_int_limited			; Set new RC pulse, new timeout and exit
@@ -3158,40 +3115,6 @@ pca_int_check_legal_range:
 	mov	Temp1, #RCP_MAX
 
 pca_int_limited:
-; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
-; 
-; ∂‘ RCP –≈∫≈¥¶¿Ì
-; 1 –°”⁄ 1500us ◊ÓµÕ”Õ√≈
-; 2 ¥Û”⁄ 1500us ’˝≥£¥¶¿Ì
-; 
-	clr C
-	mov A, Temp1
-	subb A, #THR_SWITCH				; Temp1 - THR_SWITCH < 0 ?
-	jnc skypup_03					; No Ã¯◊™
-	mov	Temp1, #RCP_MIN
-skypup_03:
-
-	clr C
-	mov A, Temp1
-	subb A, Prev_Rcp				; …œ“ª∏ˆ Rcp > µ±«∞ Rcp ?
-	jc skypup_04					; No
-
-	subb A, #THR_DELTA				; ”Õ√≈ª∫∆Ù∂Ø‘ˆ¡ø > Rcp ‘ˆº”÷µ ?
-	jc skypup_04					; No
-
-	clr C						; ’‚“ªæ‰ƒ‹∑Ò»•µÙ? Skypup 2015.05.25
-	mov A, Prev_Rcp
-	add A, #THR_DELTA
-	mov Temp1, A
-	jnc skypup_04					; √ª”–∑¢…˙Ω¯Œª“Á≥ˆ
-
-	mov Temp1, #0FFh	
-	
-skypup_04:
-	mov A, New_Rcp
-	mov Prev_Rcp, A
-
-; **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** **** ****
 	; RC pulse value accepted
 	mov	New_Rcp, Temp1				; Store new pulse length
 	setb	Flags2.RCP_UPDATED		 	; Set updated flag
@@ -4736,20 +4659,20 @@ adjust_timing:
 	mov	A, Temp8				
 	jb	ACC.0, adjust_timing_two_steps	; If an odd number - branch
 
-	mov	A, Temp1				; Add 7.5?and store in Temp1/2
+	mov	A, Temp1				; Add 7.5∞ and store in Temp1/2
 	add	A, Temp5
 	mov	Temp1, A
 	mov	A, Temp2
 	addc	A, Temp6
 	mov	Temp2, A
-	mov	A, Temp5				; Store 7.5?in Temp3/4
+	mov	A, Temp5				; Store 7.5∞ in Temp3/4
 	mov	Temp3, A
 	mov	A, Temp6			
 	mov	Temp4, A
 	jmp	store_times_up_or_down
 
 adjust_timing_two_steps:
-	mov	A, Temp1				; Add 15?and store in Temp1/2
+	mov	A, Temp1				; Add 15∞ and store in Temp1/2
 	add	A, Temp1
 	mov	Temp1, A
 	mov	A, Temp2
@@ -4766,20 +4689,20 @@ store_times_up_or_down:
 	jc	store_times_decrease	; No - branch
 
 store_times_increase:
-	mov	Wt_Comm_L, Temp3		; Now commutation time (~60? divided by 4 (~15?nominal)
+	mov	Wt_Comm_L, Temp3		; Now commutation time (~60∞) divided by 4 (~15∞ nominal)
 	mov	Wt_Comm_H, Temp4
-	mov	Wt_Advance_L, Temp1		; New commutation advance time (~15?nominal)
+	mov	Wt_Advance_L, Temp1		; New commutation advance time (~15∞ nominal)
 	mov	Wt_Advance_H, Temp2
-	mov	Wt_Zc_Scan_L, Temp5		; Use this value for zero cross scan delay (7.5?
+	mov	Wt_Zc_Scan_L, Temp5		; Use this value for zero cross scan delay (7.5∞)
 	mov	Wt_Zc_Scan_H, Temp6
 	ret
 
 store_times_decrease:
-	mov	Wt_Comm_L, Temp1		; Now commutation time (~60? divided by 4 (~15?nominal)
+	mov	Wt_Comm_L, Temp1		; Now commutation time (~60∞) divided by 4 (~15∞ nominal)
 	mov	Wt_Comm_H, Temp2
-	mov	Wt_Advance_L, Temp3		; New commutation advance time (~15?nominal)
+	mov	Wt_Advance_L, Temp3		; New commutation advance time (~15∞ nominal)
 	mov	Wt_Advance_H, Temp4
-	mov	Wt_Zc_Scan_L, Temp5		; Use this value for zero cross scan delay (7.5?
+	mov	Wt_Zc_Scan_L, Temp5		; Use this value for zero cross scan delay (7.5∞)
 	mov	Wt_Zc_Scan_H, Temp6
 	ret
 
@@ -5970,8 +5893,8 @@ clear_ram:
 	djnz Temp1, clear_ram	; Is A not zero? - jump
 	; Set default programmed parameters
 	call	set_default_parameters
-	; EEPROM ªπ‘≠Œ™ƒ¨»œ÷µ
-	call erase_and_store_all_in_eeprom
+	; Read all programmed parameters
+	call read_all_eeprom_parameters
 	; Decode parameters
 	call	decode_parameters
 	; Decode governor gains
@@ -6093,14 +6016,9 @@ validate_rcp_start:
 
 	; Beep arm sequence start signal
 	clr 	EA							; Disable all interrupts
+	call beep_f1						; Signal that RC pulse is ready
 	call beep_f1
-	call wait30ms
 	call beep_f1
-	call wait30ms
-	call beep_f2
-	call wait30ms
-	call beep_f2
-	call wait30ms
 	setb	EA							; Enable all interrupts
 	call wait200ms	
 
@@ -6263,14 +6181,9 @@ arm_target_updated:
 arm_end_beep:
 	; Beep arm sequence end signal
 	clr 	EA					; Disable all interrupts
+	call beep_f4				; Signal that rcpulse is ready
 	call beep_f4
-	call wait30ms
 	call beep_f4
-	call wait30ms
-	call beep_f3
-	call wait30ms
-	call beep_f3
-	call wait30ms
 	setb	EA					; Enable all interrupts
 	call wait200ms
 

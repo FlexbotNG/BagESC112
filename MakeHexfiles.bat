@@ -1,5 +1,6 @@
 DEL BLHeli.#?		> nul
 DEL Output\Hex\*.* /Q 	> nul
+DEL .\*.hex /Q 		> nul
 RMDIR Output\Hex 	> nul
 DEL Output\*.* /Q 	> nul
 RMDIR Output		> nul
@@ -17,7 +18,7 @@ MKDIR Output\Hex
 rem ***** adapt settings to your enviroment ****
 SET Revision=Rev11_2
 SET SilabsPath=C:\SiLabs
-SET RaisonancePath=C:\Raisonance
+SET RaisonancePath=C:\Progra~1\Raisonance
 
 @ECHO ***** Result of Batch file for BlHeli (from 4712) v.1.1       ***** > MakeHex_Result.txt
 @ECHO Revision: %Revision% >> MakeHex_Result.txt

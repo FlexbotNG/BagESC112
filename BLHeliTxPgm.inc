@@ -530,11 +530,6 @@ success_beep:
 	call beep_f2
 	call beep_f3
 	call beep_f4
-	call wait10ms
-	call beep_f1
-	call beep_f2
-	call beep_f3
-	call beep_f4
 	setb	EA					; Enable all interrupts
 	ret
 
@@ -548,11 +543,6 @@ success_beep:
 ;**** **** **** **** **** **** **** **** **** **** **** **** ****
 success_beep_inverted:
 	clr	EA					; Disable all interrupts
-	call beep_f4
-	call beep_f3
-	call beep_f2
-	call beep_f1
-	call wait10ms
 	call beep_f4
 	call beep_f3
 	call beep_f2
