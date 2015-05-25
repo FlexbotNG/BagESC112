@@ -216,7 +216,7 @@ DEFAULT_PGM_MULTI_LOW_VOLTAGE_LIM	EQU 1 	; 1=Off		2=3.0V/c		3=3.1V/c		4=3.2V/c		
 DEFAULT_PGM_MULTI_STARTUP_RPM		EQU 1 	; 1=0.67		2=0.8 		3=1.00 		4=1.25 		5=1.5
 DEFAULT_PGM_MULTI_STARTUP_ACCEL	EQU 5 	; 1=0.4 		2=0.7 		3=1.0 		4=1.5 		5=2.3
 DEFAULT_PGM_MULTI_COMM_TIMING		EQU 3 	; 1=Low 		2=MediumLow 	3=Medium 		4=MediumHigh 	5=High
-DEFAULT_PGM_MULTI_THROTTLE_RATE	EQU 13	; 1=2		2=3			3=4			4=6 			5=8	 	6=12 	7=16	  8=24  9=32  10=48  11=64  12=128 13=255
+DEFAULT_PGM_MULTI_THROTTLE_RATE	EQU 1	; 1=2		2=3			3=4			4=6 			5=8	 	6=12 	7=16	  8=24  9=32  10=48  11=64  12=128 13=255
 DEFAULT_PGM_MULTI_DAMPING_FORCE	EQU 6 	; 1=VeryLow 	2=Low 		3=MediumLow 	4=MediumHigh 	5=High	6=Highest
 IF DAMPED_MODE_ENABLE == 1
 DEFAULT_PGM_MULTI_PWM_FREQ	 	EQU 1 	; 1=High 		2=Low 		3=DampedLight  4=Damped 	
@@ -305,17 +305,6 @@ COMM_TIME_MIN		EQU 	1	; Minimum time (in us) for commutation wait
 TEMP_CHECK_RATE	EQU 	8	; Number of adc conversions for each check of temperature (the other conversions are used for voltage)
 
 ENDIF
-
-;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
-;
-; Skypup 2015.05.25
-;
-;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
-;
-THR_DELTA			EQU	2	; 油门缓启动增量
-THR_SWITCH		EQU	0A0h	; 超过多大油门启动
-;
-;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 
 ;**** **** **** **** ****
 ; Temporary register definitions
@@ -470,11 +459,55 @@ Tx_Pgm_Func_No:			DS	1		; Function number when doing programming by tx
 Tx_Pgm_Paraval_No:			DS	1		; Parameter value number when doing programming by tx
 Tx_Pgm_Beep_No:			DS	1		; Beep number when doing programming by tx
 
+
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
+;
 ; Skypup 2015.05.25
+; 宏定义
+;
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
+;
+THR_DELTA			EQU	2	; 油门缓启动增量
+THR_SWITCH		EQU	0A0h	; 超过多大油门启动
+;
+PWM_FULL			EQU	0FFh	; 大约 2000us 全油门
+PWM_CRUISE		EQU	07Fh	; 大约 1500us 巡航油门
+;
+HOLD_FULL_L		EQU	0EEh	; 750 0x02EE 低位
+HOLD_FULL_H		EQU	2h	; 750 0x02EE 高位
+HOLD_CRUISE_L		EQU	30h	; 30000 0x7530 低位
+HOLD_CRUISE_H		EQU	75h	; 30000 0x7530 高位
+
+
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
+;
+; Skypup 2015.05.25
+; 变量定义
+;
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
+;
 Prev_Rcp:					DS	1		; 上一次输出的 New_Rcp 值
-Run_Count_L:				DS	1		; 运行循环计数低位
-Run_Count_H:				DS	1		; 运行循环计数高位
-Temp_Skypup:				DS	1		; 临时变量
+;
+nPWMIn:					DS	1		; 读取的 PWM 信号，高或低。
+PWM_IN_HIGH				EQU	1		; PWM 高, 大于 THR_SWITCH
+PWM_IN_LOW				EQU	0		; PWM 低, 小于 THR_SWITCH
+;
+nHold_L:					DS	1		; nHold 低位
+nHold_H:					DS	1		; nHold 高位
+;
+cState:					DS	1		; 状态
+;
+;	State 状态矩阵
+; 
+;	00   ->   10   ->   20   ->   00
+; 
+;	00:Wait          -> 10
+;	10:Full          -> 20
+;	20:Cruise        -> 00
+STATE_WAIT		EQU	0x00
+STATE_FULL		EQU	0x10
+STATE_CRUISE		EQU	0x20
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 
 ; Indirect addressing data segment. The variables below must be in this sequence
 ISEG AT 080h					
@@ -1917,42 +1950,121 @@ pca_int_check_legal_range:
 	mov	Temp1, #RCP_MAX
 
 pca_int_limited:
+
 ;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 ; 
-; 对 RCP 信号处理
-; 1 小于 THR_SWITCH 最低油门
-; 2 大于 THR_SWITCH 正常处理
+; Skypup 2015.05.25
+; 对 RCP 信号处理, 给 nPWMIn 赋值
+; 	小于 THR_SWITCH nPWMIn = PWM_IN_LOW
+; 	大于 THR_SWITCH nPWMIn = PWM_IN_HIGH
 ; 
-	clr C
-	mov A, Temp1
-	subb A, #THR_SWITCH				; Temp1 - THR_SWITCH < 0 ?
-	jnc skypup_03					; No 跳转
+	clr	C
+	mov	A, Temp1
+	subb	A, #THR_SWITCH				; Temp1 - THR_SWITCH < 0 ?
+	jnc 	set_pwm_in_high			; No nPWMIn = PWM_IN_HIGH
+	mov	Temp1, #PWM_IN_LOW			; Yes nPWMIn = PWM_IN_LOW
+	jmp	set_pwm_in
+set_pwm_in_high:
+	mov	Temp1, #PWM_IN_HIGH
+set_pwm_in:
+	mov	nPWMIn, Temp1
+
+
+
+
+	; 
+	; 判断是否 PWM_IN_HIGH
+	mov	Temp1, nPWMIn
+	cjne	Temp1, #PWM_IN_HIGH, lsss
+	mov	Temp1, #PWM_CRUISE
+	mov	New_Rcp, Temp1	
+	jmp	endif_state
+lsss:
+	; 最低油门
 	mov	Temp1, #RCP_MIN
-skypup_03:
+	mov	New_Rcp, Temp1	
 
-	clr C
-	mov A, Temp1
-	subb A, Prev_Rcp				; 上一个 Rcp > 当前 Rcp ?
-	jc skypup_04					; No
+	jmp	endif_state
 
-	subb A, #THR_DELTA				; 油门缓启动增量 > Rcp 增加值 ?
-	jc skypup_04					; No
 
-	clr C						; 这一句能否去掉? Skypup 2015.05.25
-	mov A, Prev_Rcp
-	add A, #THR_DELTA
-	mov Temp1, A
-	jnc skypup_04					; 没有发生进位溢出
 
-	mov Temp1, #0FFh	
-	
-skypup_04:
+
+
+;
+; 判断 cState 状态
+;
+; 	mov	Temp1, cState				; 状态
+; 	cjne	Temp1, #STATE_FULL, eles_state_full
+; if_state_full:
+; 	; STATE_FULL 状态
+; 	; 以下是 StateFull(); 的代码
+; 	;
+; 	; 全油门
+; 	mov	Temp1, #PWM_FULL
+; 	mov	Temp1, #RCP_MIN
+; 	mov	New_Rcp, Temp1	
+; 	; 
+; 	jmp endif_state
+; 
+; eles_state_full:
+; 	mov	Temp1, cState
+; 	cjne	Temp1, #STATE_CRUISE, else_state_cruise
+; 
+; if_state_cruise:
+; 	; STATE_FULL 状态
+; 	; 以下是 StateCruise(); 的代码
+; 	;
+; 	; 巡航油门
+; 	mov	Temp1, #PWM_CRUISE
+; 	mov	Temp1, #RCP_MIN
+; 	mov	New_Rcp, Temp1	
+; 	; 
+; 	jmp endif_state
+; 
+; else_state_cruise:
+; 	; STATE_FULL 状态
+; 	; 以下是 StateWait(); 的代码
+; 	;
+; 	; 最低油门
+; 	mov	Temp1, #RCP_MIN
+; 	mov	New_Rcp, Temp1	
+; 	; 
+; 	; 判断是否 PWM_IN_HIGH
+; 	mov	Temp1, nPWMIn
+; 	cjne	Temp1, #PWM_IN_HIGH, endif_state
+; 	mov	Temp1, #STATE_FULL		; 状态切换为 STATE_FULL
+; 	mov	cState, Temp1
+; 	jmp	endif_state
+; 
+endif_state:
+
+; skypup_03:
+; 
+; 	clr C
+; 	mov A, Temp1
+; 	subb A, Prev_Rcp				; 上一个 Rcp > 当前 Rcp ?
+; 	jc skypup_04					; No
+; 
+; 	subb A, #THR_DELTA				; 油门缓启动增量 > Rcp 增加值 ?
+; 	jc skypup_04					; No
+; 
+; 	clr C						; 这一句能否去掉? Skypup 2015.05.25
+; 	mov A, Prev_Rcp
+; 	add A, #THR_DELTA
+; 	mov Temp1, A
+; 	jnc skypup_04					; 没有发生进位溢出
+; 
+; 	mov Temp1, #0FFh	
+; 	
+; skypup_04:
+
+	; 记录 New_Rcp 值
 	mov A, New_Rcp
 	mov Prev_Rcp, A
 
 ;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 	; RC pulse value accepted
-	mov	New_Rcp, Temp1				; Store new pulse length
+	; mov	New_Rcp, Temp1				; Store new pulse length
 	setb	Flags2.RCP_UPDATED		 	; Set updated flag
 	jb	Flags0.RCP_MEAS_PWM_FREQ, ($+5)	; Is measure RCP pwm frequency flag set?
 	ajmp	pca_int_set_timeout			; No - skip measurements
@@ -4355,6 +4467,16 @@ IF MODE == 2	; Multi
 	inc	Temp1
 	mov	@Temp1, #DEFAULT_PGM_PPM_CENTER_THROTTLE
 ENDIF
+
+;**** **** **** **** **** **** **** **** **** **** **** **** ****
+;
+; 初始化变量 
+; Skypup 2015.05.25
+	mov	Prev_Rcp,	#0
+	mov	nHold_L,	#0
+	mov	nHold_H,	#0
+	mov	cState,	#STATE_WAIT
+;**** **** **** **** **** **** **** **** **** **** **** **** ****
 	ret
 
 
