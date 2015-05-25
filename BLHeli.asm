@@ -1920,8 +1920,8 @@ pca_int_limited:
 ;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 ; 
 ; 对 RCP 信号处理
-; 1 小于 1500us 最低油门
-; 2 大于 1500us 正常处理
+; 1 小于 THR_SWITCH 最低油门
+; 2 大于 THR_SWITCH 正常处理
 ; 
 	clr C
 	mov A, Temp1
@@ -4781,6 +4781,8 @@ clear_ram:
 	call wait30ms
 	call beep_f3
 	call wait30ms
+	call beep_f4
+	call wait30ms
 
 	; Wait for receiver to initialize
 	call	wait1s
@@ -4878,143 +4880,6 @@ validate_rcp_start:
 	; Arming sequence start
 	mov	Gov_Arm_Target, #0		; Clear governor arm target
 arming_start:
-IF MODE >= 1	; Tail or multi
-	mov	Temp1, #Pgm_Direction	; Check if bidirectional operation
-	mov	A, @Temp1				
-	cjne	A, #3, ($+5)
-
-	ajmp	program_by_tx_checked	; Disable tx programming if bidirectional operation
-ENDIF
-
-	call wait3ms
-	mov	Temp1, #Pgm_Enable_TX_Program; Start programming mode entry if enabled
-	mov	A, @Temp1				
-	clr	C
-	subb	A, #1				; Is TX programming enabled?
-	jnc 	arming_initial_arm_check	; Yes - proceed
-
-	jmp	program_by_tx_checked	; No - branch
-
-arming_initial_arm_check:
-	mov	A, Initial_Arm			; Yes - check if it is initial arm sequence
-	clr	C
-	subb	A, #1				; Is it the initial arm sequence?
-	jnc 	arming_ppm_check		; Yes - proceed
-
-	jmp 	program_by_tx_checked	; No - branch
-
-arming_ppm_check:
-	mov	A, #((1 SHL RCP_PWM_FREQ_1KHZ)+(1 SHL RCP_PWM_FREQ_2KHZ)+(1 SHL RCP_PWM_FREQ_4KHZ)+(1 SHL RCP_PWM_FREQ_8KHZ)+(1 SHL RCP_PWM_FREQ_12KHZ))
-	anl	A, Flags3				; Check pwm frequency flags
-	jz	throttle_high_cal_start	; If no flag is set (PPM) - branch
-
-	; PWM tx program entry
-	clr	C
-	mov	A, New_Rcp			; Load new RC pulse value
-	subb	A, #RCP_MAX			; Is RC pulse max?
-	jnc	program_by_tx_entry_pwm	; Yes - proceed
-
-	jmp	program_by_tx_checked	; No - branch
-
-program_by_tx_entry_pwm:	
-	clr	EA					; Disable all interrupts
-	call beep_f4
-	setb	EA					; Enable all interrupts
-	call wait100ms
-	clr	C
-	mov	A, New_Rcp			; Load new RC pulse value
-	subb	A, #RCP_STOP			; Below stop?
-	jnc	program_by_tx_entry_pwm	; No - start over
-
-program_by_tx_entry_wait_pwm:	
-	clr	EA					; Disable all interrupts
-	call beep_f1
-	call wait10ms
-	call beep_f1
-	setb	EA					; Enable all interrupts
-	call wait100ms
-	clr	C
-	mov	A, New_Rcp			; Load new RC pulse value
-	subb	A, #RCP_MAX			; At or above max?
-	jc	program_by_tx_entry_wait_pwm	; No - start over
-
-	; jmp	program_by_tx			; Yes - enter programming mode
-
-	; PPM throttle calibration and tx program entry
-throttle_high_cal_start:
-	mov	Temp8, #5				; Set 3 seconds wait time
-throttle_high_cal:			
-	setb	Flags3.FULL_THROTTLE_RANGE	; Set range to 1000-2020us
-	call	find_throttle_gain		; Set throttle gain
-	call wait100ms				; Wait for new throttle value
-	clr	EA					; Disable interrupts (freeze New_Rcp value)
-	clr	Flags3.FULL_THROTTLE_RANGE	; Set programmed range
-	call	find_throttle_gain		; Set throttle gain
-	mov	Temp7, New_Rcp			; Store new RC pulse value
-	clr	C
-	mov	A, New_Rcp			; Load new RC pulse value
-	subb	A, #(RCP_MAX/2)		; Is RC pulse above midstick?
-	setb	EA					; Enable interrupts
-	jc	arm_target_updated		; No - branch
-
-	call wait1ms		
-	clr	EA					; Disable all interrupts
-	call beep_f4
-	setb	EA					; Enable all interrupts
-	djnz	Temp8, throttle_high_cal	; Continue to wait
-
-	clr	C
-	mov	A, Temp7				; Limit to max 250
-	subb	A, #5				; Subtract about 2% and ensure that it is 250 or lower
-	mov	Temp1, #Pgm_Ppm_Max_Throttle	; Store
-	mov	@Temp1, A			
-	call wait200ms				
-	; call erase_and_store_all_in_eeprom	
-	; call	success_beep
-
-throttle_low_cal_start:
-	mov	Temp8, #10			; Set 3 seconds wait time
-throttle_low_cal:			
-	setb	Flags3.FULL_THROTTLE_RANGE	; Set range to 1000-2020us
-	call	find_throttle_gain		; Set throttle gain
-	call wait100ms
-	clr	EA					; Disable interrupts (freeze New_Rcp value)
-	clr	Flags3.FULL_THROTTLE_RANGE	; Set programmed range
-	call	find_throttle_gain		; Set throttle gain
-	mov	Temp7, New_Rcp			; Store new RC pulse value
-	clr	C
-	mov	A, New_Rcp			; Load new RC pulse value
-	subb	A, #(RCP_MAX/2)		; Below midstick?
-	setb	EA					; Enable interrupts
-	jnc	throttle_low_cal_start	; No - start over
-
-	call wait1ms		
-	clr	EA					; Disable all interrupts
-	call beep_f1
-	call wait10ms
-	call beep_f1
-	setb	EA					; Enable all interrupts
-	djnz	Temp8, throttle_low_cal	; Continue to wait
-
-	mov	A, Temp7				
-	add	A, #5				; Add about 2%
-	mov	Temp1, #Pgm_Ppm_Min_Throttle	; Store
-	mov	@Temp1, A			
-	call wait200ms				
-	; call erase_and_store_all_in_eeprom	
-	; call	success_beep_inverted
-
-program_by_tx_entry_wait_ppm:	
-	call wait100ms
-	call	find_throttle_gain		; Set throttle gain
-	clr	C
-	mov	A, New_Rcp			; Load new RC pulse value
-	subb	A, #RCP_MAX			; At or above max?
-	jc	program_by_tx_entry_wait_ppm	; No - start over
-
-	; jmp	program_by_tx			; Yes - enter programming mode
-
-program_by_tx_checked:
 	clr	C
 	mov	A, New_Rcp			; Load new RC pulse value
 	subb	A, Gov_Arm_Target		; Is RC pulse larger than arm target?

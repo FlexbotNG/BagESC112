@@ -1,4 +1,4 @@
-MACRO ASSEMBLER BLHELI                                      05/25/15 20:01:22 PAGE     1
+MACRO ASSEMBLER BLHELI                                      05/25/15 20:41:57 PAGE     1
 
 
 DOS MACRO ASSEMBLER MA51 V06.16.13.326
@@ -2235,8 +2235,8 @@ LOC     OBJ           LINE    SOURCE
                       2529     ;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
                       2530     ; 
                       2531     ; 对 RCP 信号处理
-                      2532     ; 1 小于 1500us 最低油门
-                      2533     ; 2 大于 1500us 正常处理
+                      2532     ; 1 小于 THR_SWITCH 最低油门
+                      2533     ; 2 大于 THR_SWITCH 正常处理
                       2534     ; 
 0786    C3            2535     	CLR C
 0787    E8            2536     MOV A , R0 
@@ -4103,7 +4103,7 @@ LOC     OBJ           LINE    SOURCE
 0EA6    205807        4367     JB FLAGS0 . 0 , EVAL_COMP_EXIT 
 0EA9    1581          4368     	DEC	SP							; Routine exit without "ret" command
 0EAB    1581          4369     	DEC	SP
-0EAD    021822        4370     	LJMP	RUN_TO_WAIT_FOR_POWER_ON			; Yes - exit run mode
+0EAD    02175E        4370     	LJMP	RUN_TO_WAIT_FOR_POWER_ON			; Yes - exit run mode
                       4371     
                       4372     EVAL_COMP_EXIT: 
 0EB0    22            4373     	RET
@@ -5228,797 +5228,662 @@ LOC     OBJ           LINE    SOURCE
 130B    1207FA        5390     	CALL WAIT30MS
 130E    120829        5391     	CALL BEEP_F3
 1311    1207FA        5392     	CALL WAIT30MS
-                      5393     
-                      5394     	; Wait for receiver to initialize
-1314    120814        5395     	CALL	WAIT1S
-1317    120804        5396     	CALL	WAIT200MS
-131A    120804        5397     	CALL	WAIT200MS
-131D    1207FF        5398     	CALL	WAIT100MS
-                      5399     
-                      5400     	; Enable interrupts
-1320    75A822        5401     	MOV	IE, #22H			; Enable timer0 and timer2 interrupts
-1323    75B802        5402     	MOV	IP, #02H			; High priority to timer0 interrupts
-1326    75E690        5403     	MOV	EIE1, #90H		; Enable timer3 and PCA0 interrupts
-                      5404     	; Initialize comparator
-1329    759B80        5405     	MOV	CPT0CN, #80H		; Comparator enabled, no hysteresis
-132C    759D03        5406     	MOV	CPT0MD, #03H		; Comparator response time 1us
-                      5407     IF COMP1_USED == 1			
+1314    120830        5393     	CALL BEEP_F4
+1317    1207FA        5394     	CALL WAIT30MS
+                      5395     
+                      5396     	; Wait for receiver to initialize
+131A    120814        5397     	CALL	WAIT1S
+131D    120804        5398     	CALL	WAIT200MS
+1320    120804        5399     	CALL	WAIT200MS
+1323    1207FF        5400     	CALL	WAIT100MS
+                      5401     
+                      5402     	; Enable interrupts
+1326    75A822        5403     	MOV	IE, #22H			; Enable timer0 and timer2 interrupts
+1329    75B802        5404     	MOV	IP, #02H			; High priority to timer0 interrupts
+132C    75E690        5405     	MOV	EIE1, #90H		; Enable timer3 and PCA0 interrupts
+                      5406     	; Initialize comparator
+132F    759B80        5407     	MOV	CPT0CN, #80H		; Comparator enabled, no hysteresis
+1332    759D03        5408     	MOV	CPT0MD, #03H		; Comparator response time 1us
+                      5409     IF COMP1_USED == 1			
                                	MOV	CPT1CN, #80H		; Comparator enabled, no hysteresis
                                	MOV	CPT1MD, #03H		; Comparator response time 1us
                                ENDIF
-                      5411     	; Initialize ADC
-                      5412     	INITIALIZE_ADC			; Initialize ADC operation
-132F    75D10E        5412+1   MOV REF0CN , # 0EH  ; SET VDD (3.3V) AS REFERENCE. ENABLE TEMP SENSOR AND BIAS
-1332    75BC58        5412+1   MOV ADC0CF , # 58H  ; ADC CLOCK 2MHZ
-1335    75BB09        5412+1   MOV AMX0P , # ( 8+ADC_IP )  ; SELECT POSITIVE INPUT
-1338    75BA11        5412+1   MOV AMX0N , # 11H  ; SELECT NEGATIVE INPUT AS GROUND
-133B    75E880        5412+1   MOV ADC0CN , # 80H  ; ADC ENABLED
-133E    1207EB        5413     	CALL	WAIT1MS
-1341    D2AF          5414     	SETB	EA				; Enable all interrupts
-                      5415     	; Measure number of lipo cells
-1343    120AD3        5416     	CALL MEASURE_LIPO_CELLS			; Measure number of lipo cells
-                      5417     	; Initialize rc pulse
-                      5418     	RCP_INT_ENABLE		 			; Enable interrupt
-1346    43DA01        5418+1   ORL PCA0CPM0 , # 01H  ; INTERRUPT ENABLED
-                      5419     	RCP_CLEAR_INT_FLAG 				; Clear interrupt flag
-1349    C2D8          5419+1   CLR CCF0  ; CLEAR INTERRUPT FLAG
-134B    C269          5420     CLR FLAGS2 . 1 
-134D    120804        5421     	CALL WAIT200MS
-                      5422     	; Set initial arm variable
-1350    753001        5423     	MOV	INITIAL_ARM, #1
-                      5424     
-                      5425     	; Measure PWM frequency
-                      5426     MEASURE_PWM_FREQ_INIT: 	
-1353    D259          5427     SETB FLAGS0 . 1 
-                      5428     MEASURE_PWM_FREQ_START: 	
-1355    7A05          5429     MOV R2 , # 5 
-                      5430     MEASURE_PWM_FREQ_LOOP: 	
-                      5431     	; Check if period diff was accepted
-1357    E558          5432     	MOV	A, RCP_PERIOD_DIFF_ACCEPTED
-1359    7002          5433     	JNZ	($+4)
-                      5434     
-135B    7A05          5435     MOV R2 , # 5 
+                      5413     	; Initialize ADC
+                      5414     	INITIALIZE_ADC			; Initialize ADC operation
+1335    75D10E        5414+1   MOV REF0CN , # 0EH  ; SET VDD (3.3V) AS REFERENCE. ENABLE TEMP SENSOR AND BIAS
+1338    75BC58        5414+1   MOV ADC0CF , # 58H  ; ADC CLOCK 2MHZ
+133B    75BB09        5414+1   MOV AMX0P , # ( 8+ADC_IP )  ; SELECT POSITIVE INPUT
+133E    75BA11        5414+1   MOV AMX0N , # 11H  ; SELECT NEGATIVE INPUT AS GROUND
+1341    75E880        5414+1   MOV ADC0CN , # 80H  ; ADC ENABLED
+1344    1207EB        5415     	CALL	WAIT1MS
+1347    D2AF          5416     	SETB	EA				; Enable all interrupts
+                      5417     	; Measure number of lipo cells
+1349    120AD3        5418     	CALL MEASURE_LIPO_CELLS			; Measure number of lipo cells
+                      5419     	; Initialize rc pulse
+                      5420     	RCP_INT_ENABLE		 			; Enable interrupt
+134C    43DA01        5420+1   ORL PCA0CPM0 , # 01H  ; INTERRUPT ENABLED
+                      5421     	RCP_CLEAR_INT_FLAG 				; Clear interrupt flag
+134F    C2D8          5421+1   CLR CCF0  ; CLEAR INTERRUPT FLAG
+1351    C269          5422     CLR FLAGS2 . 1 
+1353    120804        5423     	CALL WAIT200MS
+                      5424     	; Set initial arm variable
+1356    753001        5425     	MOV	INITIAL_ARM, #1
+                      5426     
+                      5427     	; Measure PWM frequency
+                      5428     MEASURE_PWM_FREQ_INIT: 	
+1359    D259          5429     SETB FLAGS0 . 1 
+                      5430     MEASURE_PWM_FREQ_START: 	
+135B    7A05          5431     MOV R2 , # 5 
+                      5432     MEASURE_PWM_FREQ_LOOP: 	
+                      5433     	; Check if period diff was accepted
+135D    E558          5434     	MOV	A, RCP_PERIOD_DIFF_ACCEPTED
+135F    7002          5435     	JNZ	($+4)
                       5436     
-135D    1207F0        5437     	CALL WAIT3MS						; Wait for next pulse (NB: Uses Temp1/2!) 
-1360    E559          5438     	MOV	A, NEW_RCP					; Load value
-1362    C3            5439     	CLR	C
-1363    9402          5440     SUBB A , # 2 
-1365    40EE          5441     	JC	MEASURE_PWM_FREQ_START			; No - start over
-                      5442     
-1367    E52E          5443     	MOV	A, FLAGS3						; Check pwm frequency flags
-1369    541F          5444     	ANL	A, #((1 SHL RCP_PWM_FREQ_1KHZ)+(1 SHL RCP_PWM_FREQ_2KHZ)+(1 SHL RCP_PWM_FREQ_4KHZ)+(1 SHL RCP_PWM_FREQ_8KHZ)+(1 SHL RCP_PWM_FREQ_12KHZ))
-136B    855B5A        5445     	MOV	PREV_RCP_PWM_FREQ, CURR_RCP_PWM_FREQ		; Store as previous flags for next pulse 
-136E    F55B          5446     	MOV	CURR_RCP_PWM_FREQ, A					; Store current flags for next pulse 
-1370    B55AE2        5447     	CJNE	A, PREV_RCP_PWM_FREQ, MEASURE_PWM_FREQ_START	; Go back if new flags not same as previous
-                      5448     
-1373    DAE2          5449     DJNZ R2 , MEASURE_PWM_FREQ_LOOP 
+1361    7A05          5437     MOV R2 , # 5 
+                      5438     
+1363    1207F0        5439     	CALL WAIT3MS						; Wait for next pulse (NB: Uses Temp1/2!) 
+1366    E559          5440     	MOV	A, NEW_RCP					; Load value
+1368    C3            5441     	CLR	C
+1369    9402          5442     SUBB A , # 2 
+136B    40EE          5443     	JC	MEASURE_PWM_FREQ_START			; No - start over
+                      5444     
+136D    E52E          5445     	MOV	A, FLAGS3						; Check pwm frequency flags
+136F    541F          5446     	ANL	A, #((1 SHL RCP_PWM_FREQ_1KHZ)+(1 SHL RCP_PWM_FREQ_2KHZ)+(1 SHL RCP_PWM_FREQ_4KHZ)+(1 SHL RCP_PWM_FREQ_8KHZ)+(1 SHL RCP_PWM_FREQ_12KHZ))
+1371    855B5A        5447     	MOV	PREV_RCP_PWM_FREQ, CURR_RCP_PWM_FREQ		; Store as previous flags for next pulse 
+1374    F55B          5448     	MOV	CURR_RCP_PWM_FREQ, A					; Store current flags for next pulse 
+1376    B55AE2        5449     	CJNE	A, PREV_RCP_PWM_FREQ, MEASURE_PWM_FREQ_START	; Go back if new flags not same as previous
                       5450     
-                      5451     	; Clear measure pwm frequency flag
-1375    C259          5452     CLR FLAGS0 . 1 
-                      5453     	; Set up RC pulse interrupts after pwm frequency measurement
-                      5454     	RCP_INT_FIRST 						; Enable interrupt and set to first edge
-1377    53DACF        5454+1   ANL PCA0CPM0 , # 0CFH 
-137A    207603        5454+1   JB FLAGS3 . 6 , ( $+6 )  ; IS PWM POLARITY POSITIVE?
-137D    43DA20        5454+1   ORL PCA0CPM0 , # 20H  ; CAPTURE RISING EDGE
-1380    307603        5454+1   JNB FLAGS3 . 6 , ( $+6 )  ; IS PWM POLARITY NEGATIVE?
-1383    43DA10        5454+1   ORL PCA0CPM0 , # 10H  ; CAPTURE FALLING EDGE
-                      5455     	RCP_CLEAR_INT_FLAG 					; Clear interrupt flag
-1386    C2D8          5455+1   CLR CCF0  ; CLEAR INTERRUPT FLAG
-1388    C269          5456     CLR FLAGS2 . 1 
-138A    1207FF        5457     	CALL WAIT100MS						; Wait for new RC pulse
-                      5458     
-                      5459     	; Validate RC pulse
-                      5460     VALIDATE_RCP_START: 	
-138D    1207F0        5461     	CALL WAIT3MS						; Wait for next pulse (NB: Uses Temp1/2!) 
-1390    7802          5462     MOV R0 , # 2 
-1392    741F          5463     	MOV	A, #((1 SHL RCP_PWM_FREQ_1KHZ)+(1 SHL RCP_PWM_FREQ_2KHZ)+(1 SHL RCP_PWM_FREQ_4KHZ)+(1 SHL RCP_PWM_FREQ_8KHZ)+(1 SHL RCP_PWM_FREQ_12KHZ))
-1394    552E          5464     	ANL	A, FLAGS3						; Check pwm frequency flags
-1396    7002          5465     	JNZ	($+4)						; If a flag is set (PWM) - branch
-                      5466     
-1398    7800          5467     MOV R0 , # 0 
+1379    DAE2          5451     DJNZ R2 , MEASURE_PWM_FREQ_LOOP 
+                      5452     
+                      5453     	; Clear measure pwm frequency flag
+137B    C259          5454     CLR FLAGS0 . 1 
+                      5455     	; Set up RC pulse interrupts after pwm frequency measurement
+                      5456     	RCP_INT_FIRST 						; Enable interrupt and set to first edge
+137D    53DACF        5456+1   ANL PCA0CPM0 , # 0CFH 
+1380    207603        5456+1   JB FLAGS3 . 6 , ( $+6 )  ; IS PWM POLARITY POSITIVE?
+1383    43DA20        5456+1   ORL PCA0CPM0 , # 20H  ; CAPTURE RISING EDGE
+1386    307603        5456+1   JNB FLAGS3 . 6 , ( $+6 )  ; IS PWM POLARITY NEGATIVE?
+1389    43DA10        5456+1   ORL PCA0CPM0 , # 10H  ; CAPTURE FALLING EDGE
+                      5457     	RCP_CLEAR_INT_FLAG 					; Clear interrupt flag
+138C    C2D8          5457+1   CLR CCF0  ; CLEAR INTERRUPT FLAG
+138E    C269          5458     CLR FLAGS2 . 1 
+1390    1207FF        5459     	CALL WAIT100MS						; Wait for new RC pulse
+                      5460     
+                      5461     	; Validate RC pulse
+                      5462     VALIDATE_RCP_START: 	
+1393    1207F0        5463     	CALL WAIT3MS						; Wait for next pulse (NB: Uses Temp1/2!) 
+1396    7802          5464     MOV R0 , # 2 
+1398    741F          5465     	MOV	A, #((1 SHL RCP_PWM_FREQ_1KHZ)+(1 SHL RCP_PWM_FREQ_2KHZ)+(1 SHL RCP_PWM_FREQ_4KHZ)+(1 SHL RCP_PWM_FREQ_8KHZ)+(1 SHL RCP_PWM_FREQ_12KHZ))
+139A    552E          5466     	ANL	A, FLAGS3						; Check pwm frequency flags
+139C    7002          5467     	JNZ	($+4)						; If a flag is set (PWM) - branch
                       5468     
-139A    C3            5469     	CLR	C
-139B    E559          5470     	MOV	A, NEW_RCP					; Load value
-139D    98            5471     SUBB A , R0 
-139E    40ED          5472     	JC	VALIDATE_RCP_START				; No - start over
-                      5473     
-                      5474     	; Beep arm sequence start signal
-13A0    C2AF          5475     	CLR 	EA							; Disable all interrupts
-13A2    12081B        5476     	CALL BEEP_F1
-13A5    1207FA        5477     	CALL WAIT30MS
+139E    7800          5469     MOV R0 , # 0 
+                      5470     
+13A0    C3            5471     	CLR	C
+13A1    E559          5472     	MOV	A, NEW_RCP					; Load value
+13A3    98            5473     SUBB A , R0 
+13A4    40ED          5474     	JC	VALIDATE_RCP_START				; No - start over
+                      5475     
+                      5476     	; Beep arm sequence start signal
+13A6    C2AF          5477     	CLR 	EA							; Disable all interrupts
 13A8    12081B        5478     	CALL BEEP_F1
 13AB    1207FA        5479     	CALL WAIT30MS
-13AE    120822        5480     	CALL BEEP_F2
+13AE    12081B        5480     	CALL BEEP_F1
 13B1    1207FA        5481     	CALL WAIT30MS
 13B4    120822        5482     	CALL BEEP_F2
 13B7    1207FA        5483     	CALL WAIT30MS
-13BA    D2AF          5484     	SETB	EA							; Enable all interrupts
-13BC    120804        5485     	CALL WAIT200MS	
-                      5486     
-                      5487     	; Arming sequence start
-13BF    754800        5488     	MOV	GOV_ARM_TARGET, #0		; Clear governor arm target
-                      5489     ARMING_START: 
-                      5490     IF MODE >= 1	; Tail or multi
-13C2    7888          5491     MOV R0 , # PGM_DIRECTION 
-13C4    E6            5492     MOV A , @ R0 
-13C5    B40302        5493     	CJNE	A, #3, ($+5)
-                      5494     
-13C8    818B          5495     	AJMP	PROGRAM_BY_TX_CHECKED	; Disable tx programming if bidirectional operation
-                      5496     ENDIF
-                      5497     
-13CA    1207F0        5498     	CALL WAIT3MS
-13CD    788C          5499     MOV R0 , # PGM_ENABLE_TX_PROGRAM 
-13CF    E6            5500     MOV A , @ R0 
-13D0    C3            5501     	CLR	C
-13D1    9401          5502     	SUBB	A, #1				; Is TX programming enabled?
-13D3    5003          5503     	JNC 	ARMING_INITIAL_ARM_CHECK	; Yes - proceed
-                      5504     
-13D5    02148B        5505     	JMP	PROGRAM_BY_TX_CHECKED	; No - branch
-                      5506     
-                      5507     ARMING_INITIAL_ARM_CHECK: 
-13D8    E530          5508     	MOV	A, INITIAL_ARM			; Yes - check if it is initial arm sequence
-13DA    C3            5509     	CLR	C
-13DB    9401          5510     	SUBB	A, #1				; Is it the initial arm sequence?
-13DD    5003          5511     	JNC 	ARMING_PPM_CHECK		; Yes - proceed
-                      5512     
-13DF    02148B        5513     	JMP 	PROGRAM_BY_TX_CHECKED	; No - branch
-                      5514     
-                      5515     ARMING_PPM_CHECK: 
-13E2    741F          5516     	MOV	A, #((1 SHL RCP_PWM_FREQ_1KHZ)+(1 SHL RCP_PWM_FREQ_2KHZ)+(1 SHL RCP_PWM_FREQ_4KHZ)+(1 SHL RCP_PWM_FREQ_8KHZ)+(1 SHL RCP_PWM_FREQ_12KHZ))
-13E4    552E          5517     	ANL	A, FLAGS3				; Check pwm frequency flags
-13E6    6032          5518     	JZ	THROTTLE_HIGH_CAL_START	; If no flag is set (PPM) - branch
-                      5519     
-                      5520     	; PWM tx program entry
-13E8    C3            5521     	CLR	C
-13E9    E559          5522     	MOV	A, NEW_RCP			; Load new RC pulse value
-13EB    94FF          5523     SUBB A , # 255 
-13ED    5003          5524     	JNC	PROGRAM_BY_TX_ENTRY_PWM	; Yes - proceed
-                      5525     
-13EF    02148B        5526     	JMP	PROGRAM_BY_TX_CHECKED	; No - branch
-                      5527     
-                      5528     PROGRAM_BY_TX_ENTRY_PWM: 	
-13F2    C2AF          5529     	CLR	EA					; Disable all interrupts
-13F4    120830        5530     	CALL BEEP_F4
-13F7    D2AF          5531     	SETB	EA					; Enable all interrupts
-13F9    1207FF        5532     	CALL WAIT100MS
-13FC    C3            5533     	CLR	C
-13FD    E559          5534     	MOV	A, NEW_RCP			; Load new RC pulse value
-13FF    9401          5535     SUBB A , # 1 
-1401    50EF          5536     	JNC	PROGRAM_BY_TX_ENTRY_PWM	; No - start over
-                      5537     
-                      5538     PROGRAM_BY_TX_ENTRY_WAIT_PWM: 	
-1403    C2AF          5539     	CLR	EA					; Disable all interrupts
-1405    12081B        5540     	CALL BEEP_F1
-1408    1207F5        5541     	CALL WAIT10MS
-140B    12081B        5542     	CALL BEEP_F1
-140E    D2AF          5543     	SETB	EA					; Enable all interrupts
-1410    1207FF        5544     	CALL WAIT100MS
-1413    C3            5545     	CLR	C
-1414    E559          5546     	MOV	A, NEW_RCP			; Load new RC pulse value
-1416    94FF          5547     SUBB A , # 255 
-1418    40E9          5548     	JC	PROGRAM_BY_TX_ENTRY_WAIT_PWM	; No - start over
-                      5549     
-                      5550     	; jmp	program_by_tx			; Yes - enter programming mode
-                      5551     
-                      5552     	; PPM throttle calibration and tx program entry
-                      5553     THROTTLE_HIGH_CAL_START: 
-141A    7F05          5554     MOV R7 , # 5 
-                      5555     THROTTLE_HIGH_CAL: 			
-141C    D277          5556     SETB FLAGS3 . 7 
-141E    5146          5557     	CALL	FIND_THROTTLE_GAIN		; Set throttle gain
-1420    1207FF        5558     	CALL WAIT100MS				; Wait for new throttle value
-1423    C2AF          5559     	CLR	EA					; Disable interrupts (freeze New_Rcp value)
-1425    C277          5560     CLR FLAGS3 . 7 
-1427    5146          5561     	CALL	FIND_THROTTLE_GAIN		; Set throttle gain
-1429    AE59          5562     MOV R6 , NEW_RCP 
-142B    C3            5563     	CLR	C
-142C    E559          5564     	MOV	A, NEW_RCP			; Load new RC pulse value
-142E    947F          5565     	SUBB	A, #(RCP_MAX/2)		; Is RC pulse above midstick?
-1430    D2AF          5566     	SETB	EA					; Enable interrupts
-1432    4061          5567     	JC	ARM_TARGET_UPDATED		; No - branch
-                      5568     
-1434    1207EB        5569     	CALL WAIT1MS		
-1437    C2AF          5570     	CLR	EA					; Disable all interrupts
-1439    120830        5571     	CALL BEEP_F4
-143C    D2AF          5572     	SETB	EA					; Enable all interrupts
-143E    DFDC          5573     DJNZ R7 , THROTTLE_HIGH_CAL 
-                      5574     
-1440    C3            5575     	CLR	C
-1441    EE            5576     MOV A , R6 
-1442    9405          5577     	SUBB	A, #5				; Subtract about 2% and ensure that it is 250 or lower
-1444    7897          5578     MOV R0 , # PGM_PPM_MAX_THROTTLE 
-1446    F6            5579     MOV @ R0 , A 
-1447    120804        5580     	CALL WAIT200MS				
-                      5581     	; call erase_and_store_all_in_eeprom	
-                      5582     	; call	success_beep
-                      5583     
-                      5584     THROTTLE_LOW_CAL_START: 
-144A    7F0A          5585     MOV R7 , # 10 
-                      5586     THROTTLE_LOW_CAL: 			
-144C    D277          5587     SETB FLAGS3 . 7 
-144E    5146          5588     	CALL	FIND_THROTTLE_GAIN		; Set throttle gain
-1450    1207FF        5589     	CALL WAIT100MS
-1453    C2AF          5590     	CLR	EA					; Disable interrupts (freeze New_Rcp value)
-1455    C277          5591     CLR FLAGS3 . 7 
-1457    5146          5592     	CALL	FIND_THROTTLE_GAIN		; Set throttle gain
-1459    AE59          5593     MOV R6 , NEW_RCP 
-145B    C3            5594     	CLR	C
-145C    E559          5595     	MOV	A, NEW_RCP			; Load new RC pulse value
-145E    947F          5596     	SUBB	A, #(RCP_MAX/2)		; Below midstick?
-1460    D2AF          5597     	SETB	EA					; Enable interrupts
-1462    50E6          5598     	JNC	THROTTLE_LOW_CAL_START	; No - start over
-                      5599     
-1464    1207EB        5600     	CALL WAIT1MS		
-1467    C2AF          5601     	CLR	EA					; Disable all interrupts
-1469    12081B        5602     	CALL BEEP_F1
-146C    1207F5        5603     	CALL WAIT10MS
-146F    12081B        5604     	CALL BEEP_F1
-1472    D2AF          5605     	SETB	EA					; Enable all interrupts
-1474    DFD6          5606     DJNZ R7 , THROTTLE_LOW_CAL 
-                      5607     
-1476    EE            5608     MOV A , R6 
-1477    2405          5609     	ADD	A, #5				; Add about 2%
-1479    7896          5610     MOV R0 , # PGM_PPM_MIN_THROTTLE 
-147B    F6            5611     MOV @ R0 , A 
-147C    120804        5612     	CALL WAIT200MS				
-                      5613     	; call erase_and_store_all_in_eeprom	
-                      5614     	; call	success_beep_inverted
-                      5615     
-                      5616     PROGRAM_BY_TX_ENTRY_WAIT_PPM: 	
-147F    1207FF        5617     	CALL WAIT100MS
-1482    5146          5618     	CALL	FIND_THROTTLE_GAIN		; Set throttle gain
-1484    C3            5619     	CLR	C
-1485    E559          5620     	MOV	A, NEW_RCP			; Load new RC pulse value
-1487    94FF          5621     SUBB A , # 255 
-1489    40F4          5622     	JC	PROGRAM_BY_TX_ENTRY_WAIT_PPM	; No - start over
-                      5623     
-                      5624     	; jmp	program_by_tx			; Yes - enter programming mode
-                      5625     
-                      5626     PROGRAM_BY_TX_CHECKED: 
-148B    C3            5627     	CLR	C
-148C    E559          5628     	MOV	A, NEW_RCP			; Load new RC pulse value
-148E    9548          5629     	SUBB	A, GOV_ARM_TARGET		; Is RC pulse larger than arm target?
-1490    4003          5630     	JC	ARM_TARGET_UPDATED		; No - do not update
-                      5631     
-1492    855948        5632     	MOV	GOV_ARM_TARGET, NEW_RCP	; Yes - update arm target
-                      5633     
-                      5634     ARM_TARGET_UPDATED: 
-1495    1207FF        5635     	CALL WAIT100MS				; Wait for new throttle value
-1498    C3            5636     	CLR	C
-1499    E559          5637     	MOV	A, NEW_RCP			; Load new RC pulse value
-149B    9401          5638     SUBB A , # 1 
-149D    4002          5639     	JC	ARM_END_BEEP			; Yes - proceed
-                      5640     
-149F    61C2          5641     	JMP	ARMING_START			; No - start over
-                      5642     
-                      5643     ARM_END_BEEP: 
-                      5644     	; Beep arm sequence end signal
-14A1    C2AF          5645     	CLR 	EA					; Disable all interrupts
-14A3    120830        5646     	CALL BEEP_F4
-14A6    1207FA        5647     	CALL WAIT30MS
-14A9    120830        5648     	CALL BEEP_F4
-14AC    1207FA        5649     	CALL WAIT30MS
-14AF    120829        5650     	CALL BEEP_F3
-14B2    1207FA        5651     	CALL WAIT30MS
-14B5    120829        5652     	CALL BEEP_F3
-14B8    1207FA        5653     	CALL WAIT30MS
-14BB    D2AF          5654     	SETB	EA					; Enable all interrupts
-14BD    120804        5655     	CALL WAIT200MS
-                      5656     
-                      5657     	; Clear initial arm variable
-14C0    753000        5658     	MOV	INITIAL_ARM, #0
+13BA    120822        5484     	CALL BEEP_F2
+13BD    1207FA        5485     	CALL WAIT30MS
+13C0    D2AF          5486     	SETB	EA							; Enable all interrupts
+13C2    120804        5487     	CALL WAIT200MS	
+                      5488     
+                      5489     	; Arming sequence start
+13C5    754800        5490     	MOV	GOV_ARM_TARGET, #0		; Clear governor arm target
+                      5491     ARMING_START: 
+13C8    C3            5492     	CLR	C
+13C9    E559          5493     	MOV	A, NEW_RCP			; Load new RC pulse value
+13CB    9548          5494     	SUBB	A, GOV_ARM_TARGET		; Is RC pulse larger than arm target?
+13CD    4003          5495     	JC	ARM_TARGET_UPDATED		; No - do not update
+                      5496     
+13CF    855948        5497     	MOV	GOV_ARM_TARGET, NEW_RCP	; Yes - update arm target
+                      5498     
+                      5499     ARM_TARGET_UPDATED: 
+13D2    1207FF        5500     	CALL WAIT100MS				; Wait for new throttle value
+13D5    C3            5501     	CLR	C
+13D6    E559          5502     	MOV	A, NEW_RCP			; Load new RC pulse value
+13D8    9401          5503     SUBB A , # 1 
+13DA    4002          5504     	JC	ARM_END_BEEP			; Yes - proceed
+                      5505     
+13DC    80EA          5506     	JMP	ARMING_START			; No - start over
+                      5507     
+                      5508     ARM_END_BEEP: 
+                      5509     	; Beep arm sequence end signal
+13DE    C2AF          5510     	CLR 	EA					; Disable all interrupts
+13E0    120830        5511     	CALL BEEP_F4
+13E3    1207FA        5512     	CALL WAIT30MS
+13E6    120830        5513     	CALL BEEP_F4
+13E9    1207FA        5514     	CALL WAIT30MS
+13EC    120829        5515     	CALL BEEP_F3
+13EF    1207FA        5516     	CALL WAIT30MS
+13F2    120829        5517     	CALL BEEP_F3
+13F5    1207FA        5518     	CALL WAIT30MS
+13F8    D2AF          5519     	SETB	EA					; Enable all interrupts
+13FA    120804        5520     	CALL WAIT200MS
+                      5521     
+                      5522     	; Clear initial arm variable
+13FD    753000        5523     	MOV	INITIAL_ARM, #0
+                      5524     
+                      5525     	; Armed and waiting for power on
+                      5526     WAIT_FOR_POWER_ON: 
+1400    E4            5527     	CLR	A
+1401    F531          5528     	MOV	POWER_ON_WAIT_CNT_L, A	; Clear wait counter
+1403    F532          5529     	MOV	POWER_ON_WAIT_CNT_H, A	
+                      5530     WAIT_FOR_POWER_ON_LOOP: 
+1405    0531          5531     	INC	POWER_ON_WAIT_CNT_L		; Increment low wait counter
+1407    E531          5532     	MOV	A, POWER_ON_WAIT_CNT_L
+1409    F4            5533     	CPL	A
+140A    7039          5534     	JNZ	WAIT_FOR_POWER_ON_NO_BEEP; Counter wrapping (about 1 sec)?
+                      5535     
+140C    0532          5536     	INC	POWER_ON_WAIT_CNT_H		; Increment high wait counter
+140E    789A          5537     MOV R0 , # PGM_BEACON_DELAY 
+1410    E6            5538     MOV A , @ R0 
+1411    7819          5539     MOV R0 , # 25 
+1413    14            5540     	DEC	A
+1414    6012          5541     	JZ	BEEP_DELAY_SET
+                      5542     
+1416    7832          5543     MOV R0 , # 50 
+1418    14            5544     	DEC	A
+1419    600D          5545     	JZ	BEEP_DELAY_SET
+                      5546     
+141B    787D          5547     MOV R0 , # 125 
+141D    14            5548     	DEC	A
+141E    6008          5549     	JZ	BEEP_DELAY_SET
+                      5550     
+1420    78FA          5551     MOV R0 , # 250 
+1422    14            5552     	DEC	A
+1423    6003          5553     	JZ	BEEP_DELAY_SET
+                      5554     
+1425    753200        5555     	MOV	POWER_ON_WAIT_CNT_H, #0		; Reset counter for infinite delay
+                      5556     
+                      5557     BEEP_DELAY_SET: 
+1428    C3            5558     	CLR	C
+1429    E532          5559     	MOV	A, POWER_ON_WAIT_CNT_H
+142B    98            5560     SUBB A , R0 
+142C    4017          5561     	JC	WAIT_FOR_POWER_ON_NO_BEEP; Has delay elapsed?
+                      5562     
+142E    1532          5563     	DEC	POWER_ON_WAIT_CNT_H		; Decrement high wait counter
+1430    7531B4        5564     	MOV	POWER_ON_WAIT_CNT_L, #180; Set low wait counter
+1433    7899          5565     MOV R0 , # PGM_BEACON_STRENGTH 
+1435    866F          5566     MOV BEEP_STRENGTH , @ R0 
+1437    C2AF          5567     	CLR 	EA					; Disable all interrupts
+1439    120830        5568     	CALL BEEP_F4				; Signal that there is no signal
+143C    D2AF          5569     	SETB	EA					; Enable all interrupts
+143E    7898          5570     MOV R0 , # PGM_BEEP_STRENGTH 
+1440    866F          5571     MOV BEEP_STRENGTH , @ R0 
+1442    1207FF        5572     	CALL WAIT100MS				; Wait for new RC pulse to be measured
+                      5573     
+                      5574     WAIT_FOR_POWER_ON_NO_BEEP: 
+1445    1207F5        5575     	CALL WAIT10MS
+1448    E528          5576     	MOV	A, RCP_TIMEOUT_CNT				; Load RC pulse timeout counter value
+144A    7008          5577     	JNZ	WAIT_FOR_POWER_ON_PPM_NOT_MISSING	; If it is not zero - proceed
+                      5578     
+144C    741F          5579     	MOV	A, #((1 SHL RCP_PWM_FREQ_1KHZ)+(1 SHL RCP_PWM_FREQ_2KHZ)+(1 SHL RCP_PWM_FREQ_4KHZ)+(1 SHL RCP_PWM_FREQ_8KHZ)+(1 SHL RCP_PWM_FREQ_12KHZ))
+144E    552E          5580     	ANL	A, FLAGS3						; Check pwm frequency flags
+1450    7002          5581     	JNZ	WAIT_FOR_POWER_ON_PPM_NOT_MISSING	; If a flag is set (PWM) - branch
+                      5582     
+1452    6159          5583     	JMP	MEASURE_PWM_FREQ_INIT			; If ppm and pulses missing - go back to measure pwm frequency
+                      5584     
+                      5585     WAIT_FOR_POWER_ON_PPM_NOT_MISSING: 
+1454    C3            5586     	CLR	C
+1455    E559          5587     	MOV	A, NEW_RCP			; Load new RC pulse value
+1457    9406          5588     	SUBB	A, #(RCP_STOP+5) 		; Higher than stop (plus some hysteresis)?
+1459    40AA          5589     	JC	WAIT_FOR_POWER_ON_LOOP	; No - start over
+                      5590     
+                      5591     IF MODE >= 1	; Tail or multi
+145B    7888          5592     MOV R0 , # PGM_DIRECTION 
+145D    E6            5593     MOV A , @ R0 
+145E    C3            5594     	CLR	C
+145F    9403          5595     	SUBB	A, #3
+1461    6003          5596     	JZ 	($+5)				; Do not wait if bidirectional operation
+                      5597     ENDIF
+                      5598     
+1463    1207FF        5599     	LCALL WAIT100MS			; Wait to see if start pulse was only a glitch
+                      5600     
+1466    E528          5601     	MOV	A, RCP_TIMEOUT_CNT		; Load RC pulse timeout counter value
+1468    7003          5602     	JNZ	($+5)				; If it is not zero - proceed
+                      5603     
+146A    021359        5604     	LJMP	MEASURE_PWM_FREQ_INIT	; If it is zero (pulses missing) - go back to measure pwm frequency
+                      5605     
+                      5606     
+                      5607     ;**** **** **** **** **** **** **** **** **** **** **** **** ****
+                      5608     ;
+                      5609     ; Start entry point
+                      5610     ;
+                      5611     ;**** **** **** **** **** **** **** **** **** **** **** **** ****
+                      5612     INIT_START: 
+146D    C2AF          5613     	CLR	EA
+146F    1197          5614     	CALL SWITCH_POWER_OFF
+1471    E4            5615     	CLR	A
+1472    F522          5616     	MOV	REQUESTED_PWM, A		; Set requested pwm to zero
+1474    F523          5617     	MOV	GOVERNOR_REQ_PWM, A		; Set governor requested pwm to zero
+1476    F524          5618     	MOV	CURRENT_PWM, A			; Set current pwm to zero
+1478    F525          5619     	MOV	CURRENT_PWM_LIMITED, A	; Set limited current pwm to zero
+147A    D2AF          5620     	SETB	EA
+147C    7885          5621     MOV R0 , # PGM_MOTOR_IDLE 
+147E    8661          5622     MOV PWM_MOTOR_IDLE , @ R0 
+1480    F540          5623     	MOV	GOV_TARGET_L, A		; Set target to zero
+1482    F541          5624     	MOV	GOV_TARGET_H, A
+1484    F542          5625     	MOV	GOV_INTEGRAL_L, A		; Set integral to zero
+1486    F543          5626     	MOV	GOV_INTEGRAL_H, A
+1488    F544          5627     	MOV	GOV_INTEGRAL_X, A
+148A    F56C          5628     	MOV	ADC_CONVERSION_CNT, A
+148C    F549          5629     	MOV	GOV_ACTIVE, A
+148E    F52B          5630     	MOV	FLAGS0, A				; Clear flags0
+1490    F52C          5631     	MOV	FLAGS1, A				; Clear flags1
+1492    F539          5632     	MOV	DEMAG_CONSECUTIVE_CNT, A
+1494    120C51        5633     	CALL INITIALIZE_ALL_TIMINGS	; Initialize timing
+                      5634     	;**** **** **** **** ****
+                      5635     	; Motor start beginning
+                      5636     	;**** **** **** **** **** 
+1497    756C08        5637     MOV ADC_CONVERSION_CNT , # 8 
+                      5638     	SET_ADC_IP_TEMP
+149A    75BB10        5638+1   MOV AMX0P , # 10H  ; SELECT TEMP SENSOR INPUT
+149D    1207EB        5639     	CALL WAIT1MS
+14A0    120B6E        5640     	CALL START_ADC_CONVERSION
+                      5641     READ_INITIAL_TEMP: 
+                      5642     	GET_ADC_STATUS 
+14A3    E5E8          5642+1   MOV A , ADC0CN 
+14A5    20ECFB        5643     	JB	AD0BUSY, READ_INITIAL_TEMP
+                      5644     	READ_ADC_RESULT						; Read initial temperature
+14A8    A8BD          5644+1   MOV R0 , ADC0L 
+14AA    A9BE          5644+1   MOV R1 , ADC0H 
+14AC    E9            5645     MOV A , R1 
+14AD    7001          5646     	JNZ	($+3)							; Is reading below 256?
+                      5647     
+14AF    F8            5648     MOV R0 , A 
+                      5649     
+14B0    886D          5650     MOV CURRENT_AVERAGE_TEMP , R0 
+14B2    120B72        5651     	CALL CHECK_TEMP_VOLTAGE_AND_LIMIT_POWER
+14B5    756C08        5652     MOV ADC_CONVERSION_CNT , # 8 
+                      5653     	SET_ADC_IP_TEMP
+14B8    75BB10        5653+1   MOV AMX0P , # 10H  ; SELECT TEMP SENSOR INPUT
+                      5654     
+                      5655     	; Go to the desired startup mode
+14BB    7895          5656     MOV R0 , # PGM_STARTUP_METHOD 
+14BD    E6            5657     MOV A , @ R0 
+14BE    30E003        5658     	JNB	ACC.0, DIRECT_METHOD_START
                       5659     
-                      5660     	; Armed and waiting for power on
-                      5661     WAIT_FOR_POWER_ON: 
-14C3    E4            5662     	CLR	A
-14C4    F531          5663     	MOV	POWER_ON_WAIT_CNT_L, A	; Clear wait counter
-14C6    F532          5664     	MOV	POWER_ON_WAIT_CNT_H, A	
-                      5665     WAIT_FOR_POWER_ON_LOOP: 
-14C8    0531          5666     	INC	POWER_ON_WAIT_CNT_L		; Increment low wait counter
-14CA    E531          5667     	MOV	A, POWER_ON_WAIT_CNT_L
-14CC    F4            5668     	CPL	A
-14CD    7039          5669     	JNZ	WAIT_FOR_POWER_ON_NO_BEEP; Counter wrapping (about 1 sec)?
-                      5670     
-14CF    0532          5671     	INC	POWER_ON_WAIT_CNT_H		; Increment high wait counter
-14D1    789A          5672     MOV R0 , # PGM_BEACON_DELAY 
-14D3    E6            5673     MOV A , @ R0 
-14D4    7819          5674     MOV R0 , # 25 
-14D6    14            5675     	DEC	A
-14D7    6012          5676     	JZ	BEEP_DELAY_SET
-                      5677     
-14D9    7832          5678     MOV R0 , # 50 
-14DB    14            5679     	DEC	A
-14DC    600D          5680     	JZ	BEEP_DELAY_SET
-                      5681     
-14DE    787D          5682     MOV R0 , # 125 
-14E0    14            5683     	DEC	A
-14E1    6008          5684     	JZ	BEEP_DELAY_SET
-                      5685     
-14E3    78FA          5686     MOV R0 , # 250 
-14E5    14            5687     	DEC	A
-14E6    6003          5688     	JZ	BEEP_DELAY_SET
-                      5689     
-14E8    753200        5690     	MOV	POWER_ON_WAIT_CNT_H, #0		; Reset counter for infinite delay
-                      5691     
-                      5692     BEEP_DELAY_SET: 
-14EB    C3            5693     	CLR	C
-14EC    E532          5694     	MOV	A, POWER_ON_WAIT_CNT_H
-14EE    98            5695     SUBB A , R0 
-14EF    4017          5696     	JC	WAIT_FOR_POWER_ON_NO_BEEP; Has delay elapsed?
-                      5697     
-14F1    1532          5698     	DEC	POWER_ON_WAIT_CNT_H		; Decrement high wait counter
-14F3    7531B4        5699     	MOV	POWER_ON_WAIT_CNT_L, #180; Set low wait counter
-14F6    7899          5700     MOV R0 , # PGM_BEACON_STRENGTH 
-14F8    866F          5701     MOV BEEP_STRENGTH , @ R0 
-14FA    C2AF          5702     	CLR 	EA					; Disable all interrupts
-14FC    120830        5703     	CALL BEEP_F4				; Signal that there is no signal
-14FF    D2AF          5704     	SETB	EA					; Enable all interrupts
-1501    7898          5705     MOV R0 , # PGM_BEEP_STRENGTH 
-1503    866F          5706     MOV BEEP_STRENGTH , @ R0 
-1505    1207FF        5707     	CALL WAIT100MS				; Wait for new RC pulse to be measured
-                      5708     
-                      5709     WAIT_FOR_POWER_ON_NO_BEEP: 
-1508    1207F5        5710     	CALL WAIT10MS
-150B    E528          5711     	MOV	A, RCP_TIMEOUT_CNT				; Load RC pulse timeout counter value
-150D    7008          5712     	JNZ	WAIT_FOR_POWER_ON_PPM_NOT_MISSING	; If it is not zero - proceed
-                      5713     
-150F    741F          5714     	MOV	A, #((1 SHL RCP_PWM_FREQ_1KHZ)+(1 SHL RCP_PWM_FREQ_2KHZ)+(1 SHL RCP_PWM_FREQ_4KHZ)+(1 SHL RCP_PWM_FREQ_8KHZ)+(1 SHL RCP_PWM_FREQ_12KHZ))
-1511    552E          5715     	ANL	A, FLAGS3						; Check pwm frequency flags
-1513    7002          5716     	JNZ	WAIT_FOR_POWER_ON_PPM_NOT_MISSING	; If a flag is set (PWM) - branch
-                      5717     
-1515    6153          5718     	JMP	MEASURE_PWM_FREQ_INIT			; If ppm and pulses missing - go back to measure pwm frequency
-                      5719     
-                      5720     WAIT_FOR_POWER_ON_PPM_NOT_MISSING: 
-1517    C3            5721     	CLR	C
-1518    E559          5722     	MOV	A, NEW_RCP			; Load new RC pulse value
-151A    9406          5723     	SUBB	A, #(RCP_STOP+5) 		; Higher than stop (plus some hysteresis)?
-151C    40AA          5724     	JC	WAIT_FOR_POWER_ON_LOOP	; No - start over
-                      5725     
-                      5726     IF MODE >= 1	; Tail or multi
-151E    7888          5727     MOV R0 , # PGM_DIRECTION 
-1520    E6            5728     MOV A , @ R0 
-1521    C3            5729     	CLR	C
-1522    9403          5730     	SUBB	A, #3
-1524    6003          5731     	JZ 	($+5)				; Do not wait if bidirectional operation
-                      5732     ENDIF
-                      5733     
-1526    1207FF        5734     	LCALL WAIT100MS			; Wait to see if start pulse was only a glitch
-                      5735     
-1529    E528          5736     	MOV	A, RCP_TIMEOUT_CNT		; Load RC pulse timeout counter value
-152B    7003          5737     	JNZ	($+5)				; If it is not zero - proceed
-                      5738     
-152D    021353        5739     	LJMP	MEASURE_PWM_FREQ_INIT	; If it is zero (pulses missing) - go back to measure pwm frequency
-                      5740     
-                      5741     
-                      5742     ;**** **** **** **** **** **** **** **** **** **** **** **** ****
-                      5743     ;
-                      5744     ; Start entry point
-                      5745     ;
-                      5746     ;**** **** **** **** **** **** **** **** **** **** **** **** ****
-                      5747     INIT_START: 
-1530    C2AF          5748     	CLR	EA
-1532    1197          5749     	CALL SWITCH_POWER_OFF
-1534    E4            5750     	CLR	A
-1535    F522          5751     	MOV	REQUESTED_PWM, A		; Set requested pwm to zero
-1537    F523          5752     	MOV	GOVERNOR_REQ_PWM, A		; Set governor requested pwm to zero
-1539    F524          5753     	MOV	CURRENT_PWM, A			; Set current pwm to zero
-153B    F525          5754     	MOV	CURRENT_PWM_LIMITED, A	; Set limited current pwm to zero
-153D    D2AF          5755     	SETB	EA
-153F    7885          5756     MOV R0 , # PGM_MOTOR_IDLE 
-1541    8661          5757     MOV PWM_MOTOR_IDLE , @ R0 
-1543    F540          5758     	MOV	GOV_TARGET_L, A		; Set target to zero
-1545    F541          5759     	MOV	GOV_TARGET_H, A
-1547    F542          5760     	MOV	GOV_INTEGRAL_L, A		; Set integral to zero
-1549    F543          5761     	MOV	GOV_INTEGRAL_H, A
-154B    F544          5762     	MOV	GOV_INTEGRAL_X, A
-154D    F56C          5763     	MOV	ADC_CONVERSION_CNT, A
-154F    F549          5764     	MOV	GOV_ACTIVE, A
-1551    F52B          5765     	MOV	FLAGS0, A				; Clear flags0
-1553    F52C          5766     	MOV	FLAGS1, A				; Clear flags1
-1555    F539          5767     	MOV	DEMAG_CONSECUTIVE_CNT, A
-1557    120C51        5768     	CALL INITIALIZE_ALL_TIMINGS	; Initialize timing
-                      5769     	;**** **** **** **** ****
-                      5770     	; Motor start beginning
-                      5771     	;**** **** **** **** **** 
-155A    756C08        5772     MOV ADC_CONVERSION_CNT , # 8 
-                      5773     	SET_ADC_IP_TEMP
-155D    75BB10        5773+1   MOV AMX0P , # 10H  ; SELECT TEMP SENSOR INPUT
-1560    1207EB        5774     	CALL WAIT1MS
-1563    120B6E        5775     	CALL START_ADC_CONVERSION
-                      5776     READ_INITIAL_TEMP: 
-                      5777     	GET_ADC_STATUS 
-1566    E5E8          5777+1   MOV A , ADC0CN 
-1568    20ECFB        5778     	JB	AD0BUSY, READ_INITIAL_TEMP
-                      5779     	READ_ADC_RESULT						; Read initial temperature
-156B    A8BD          5779+1   MOV R0 , ADC0L 
-156D    A9BE          5779+1   MOV R1 , ADC0H 
-156F    E9            5780     MOV A , R1 
-1570    7001          5781     	JNZ	($+3)							; Is reading below 256?
-                      5782     
-1572    F8            5783     MOV R0 , A 
-                      5784     
-1573    886D          5785     MOV CURRENT_AVERAGE_TEMP , R0 
-1575    120B72        5786     	CALL CHECK_TEMP_VOLTAGE_AND_LIMIT_POWER
-1578    756C08        5787     MOV ADC_CONVERSION_CNT , # 8 
-                      5788     	SET_ADC_IP_TEMP
-157B    75BB10        5788+1   MOV AMX0P , # 10H  ; SELECT TEMP SENSOR INPUT
+14C1    021505        5660     	JMP	STEPPER_METHOD_START
+                      5661     
+                      5662     DIRECT_METHOD_START: 
+                      5663     	; Set up start operating conditions
+14C4    7887          5664     MOV R0 , # PGM_PWM_FREQ 
+14C6    E6            5665     MOV A , @ R0 
+14C7    FE            5666     MOV R6 , A 
+14C8    7602          5667     MOV @ R0 , # 2 
+14CA    316E          5668     	CALL	DECODE_PARAMETERS		; (Decode_parameters uses Temp1 and Temp8)
+14CC    7887          5669     MOV R0 , # PGM_PWM_FREQ 
+14CE    EE            5670     MOV A , R6 
+14CF    F6            5671     MOV @ R0 , A 
+                      5672     	; Set max allowed power
+14D0    D261          5673     SETB FLAGS1 . 1 
+14D2    C2AF          5674     	CLR	EA					; Disable interrupts to avoid that Requested_Pwm is overwritten
+14D4    755EFF        5675     	MOV	PWM_LIMIT, #0FFH		; Set pwm limit to max
+14D7    120C21        5676     	CALL SET_STARTUP_PWM
+14DA    85225E        5677     	MOV	PWM_LIMIT, REQUESTED_PWM
+14DD    85225F        5678     	MOV	PWM_LIMIT_SPOOLUP, REQUESTED_PWM
+14E0    D2AF          5679     	SETB	EA
+14E2    C261          5680     CLR FLAGS1 . 1 
+14E4    752501        5681     	MOV	CURRENT_PWM_LIMITED, #1		; Set low pwm again after calling set_startup_pwm
+14E7    855D64        5682     	MOV	SPOOLUP_LIMIT_CNT, AUTO_BAILOUT_ARMED
+14EA    756501        5683     	MOV	SPOOLUP_LIMIT_SKIP, #1			
+                      5684     	; Begin startup sequence
+14ED    D260          5685     SETB FLAGS1 . 0 
+14EF    D263          5686     SETB FLAGS1 . 3 
+14F1    753800        5687     	MOV	DIRECT_STARTUP_OK_CNT, #0	; Reset ok counter
+14F4    120FF1        5688     	CALL COMM5COMM6				; Initialize commutation
+14F7    112C          5689     	CALL COMM6COMM1				
+14F9    120CCB        5690     	CALL	CALC_NEXT_COMM_TIMING		; Set virtual commutation point
+14FC    120C51        5691     	CALL INITIALIZE_ALL_TIMINGS		; Initialize timing
+14FF    120D4E        5692     	CALL CALC_NEW_WAIT_TIMES			; Calculate new wait times
+1502    02162D        5693     	JMP	RUN1
+                      5694     
+                      5695     
+                      5696     STEPPER_METHOD_START: 
+                      5697     	; Set up start operating conditions
+1505    7887          5698     MOV R0 , # PGM_PWM_FREQ 
+1507    E6            5699     MOV A , @ R0 
+1508    FE            5700     MOV R6 , A 
+1509    7603          5701     MOV @ R0 , # 3 
+150B    7893          5702     MOV R0 , # PGM_DAMPING_FORCE 
+150D    E6            5703     MOV A , @ R0 
+150E    FD            5704     MOV R5 , A 
+150F    7605          5705     MOV @ R0 , # 5 
+1511    316E          5706     	CALL	DECODE_PARAMETERS		; (Decode_parameters uses Temp1 and Temp8)
+1513    7887          5707     MOV R0 , # PGM_PWM_FREQ 
+1515    EE            5708     MOV A , R6 
+1516    F6            5709     MOV @ R0 , A 
+1517    7893          5710     MOV R0 , # PGM_DAMPING_FORCE 
+1519    ED            5711     MOV A , R5 
+151A    F6            5712     MOV @ R0 , A 
+                      5713     	; Begin startup sequence
+151B    D260          5714     SETB FLAGS1 . 0 
+151D    D261          5715     SETB FLAGS1 . 1 
+151F    D265          5716     SETB FLAGS1 . 5 
+1521    120FF1        5717     	CALL COMM5COMM6			; Initialize commutation
+1524    112C          5718     	CALL COMM6COMM1			
+1526    755EFF        5719     	MOV	PWM_LIMIT, #0FFH		; Set pwm limit to max
+1529    120C21        5720     	CALL SET_STARTUP_PWM
+152C    1207EB        5721     	CALL WAIT1MS
+152F    120EF9        5722     	CALL COMM1COMM2
+1532    1207EB        5723     	CALL WAIT1MS
+1535    1207EB        5724     	CALL WAIT1MS
+1538    120F2B        5725     	CALL COMM2COMM3
+153B    1207F0        5726     	CALL WAIT3MS			
+153E    120F75        5727     	CALL COMM3COMM4
+1541    1207F0        5728     	CALL WAIT3MS			
+1544    1207F0        5729     	CALL WAIT3MS			
+1547    120FB0        5730     	CALL COMM4COMM5
+154A    1207F5        5731     	CALL WAIT10MS				; Settle rotor
+154D    120FF1        5732     	CALL COMM5COMM6
+1550    1207F0        5733     	CALL WAIT3MS				
+1553    1207EB        5734     	CALL WAIT1MS			
+1556    C261          5735     CLR FLAGS1 . 1 
+1558    D262          5736     SETB FLAGS1 . 2 
+                      5737     
+                      5738     	;**** **** **** **** ****
+                      5739     	; Stepper phase beginning
+                      5740     	;**** **** **** **** **** 
+                      5741     STEPPER_ROT_BEG: 
+155A    120B6E        5742     	CALL START_ADC_CONVERSION
+155D    120B72        5743     	CALL CHECK_TEMP_VOLTAGE_AND_LIMIT_POWER
+1560    120C21        5744     	CALL SET_STARTUP_PWM
+1563    756C08        5745     MOV ADC_CONVERSION_CNT , # 8 
+                      5746     	SET_ADC_IP_TEMP
+1566    75BB10        5746+1   MOV AMX0P , # 10H  ; SELECT TEMP SENSOR INPUT
+                      5747     
+1569    112C          5748     	CALL COMM6COMM1				; Commutate
+156B    120CC4        5749     	CALL CALC_NEXT_COMM_TIMING_START	; Update timing and set timer
+156E    120D4E        5750     	CALL CALC_NEW_WAIT_TIMES
+1571    11A9          5751     	CALL DECREMENT_STEPPER_STEP
+1573    310E          5752     	CALL STEPPER_TIMER_WAIT
+                      5753     
+1575    120EF9        5754     	CALL COMM1COMM2			
+1578    120CC4        5755     	CALL CALC_NEXT_COMM_TIMING_START	
+157B    120D4E        5756     	CALL CALC_NEW_WAIT_TIMES
+157E    11A9          5757     	CALL DECREMENT_STEPPER_STEP
+1580    310E          5758     	CALL STEPPER_TIMER_WAIT
+                      5759     
+1582    120F2B        5760     	CALL COMM2COMM3			
+1585    120CC4        5761     	CALL CALC_NEXT_COMM_TIMING_START	
+1588    120D4E        5762     	CALL CALC_NEW_WAIT_TIMES
+158B    11A9          5763     	CALL DECREMENT_STEPPER_STEP
+158D    310E          5764     	CALL STEPPER_TIMER_WAIT
+                      5765     
+158F    120F75        5766     	CALL COMM3COMM4			
+1592    120CC4        5767     	CALL CALC_NEXT_COMM_TIMING_START	
+1595    120D4E        5768     	CALL CALC_NEW_WAIT_TIMES
+1598    11A9          5769     	CALL DECREMENT_STEPPER_STEP
+159A    310E          5770     	CALL STEPPER_TIMER_WAIT
+                      5771     
+159C    120FB0        5772     	CALL COMM4COMM5			
+159F    120CC4        5773     	CALL CALC_NEXT_COMM_TIMING_START	
+15A2    120D4E        5774     	CALL CALC_NEW_WAIT_TIMES
+15A5    11A9          5775     	CALL DECREMENT_STEPPER_STEP
+15A7    310E          5776     	CALL STEPPER_TIMER_WAIT
+                      5777     
+15A9    120FF1        5778     	CALL COMM5COMM6			
+15AC    120CC4        5779     	CALL CALC_NEXT_COMM_TIMING_START	
+15AF    120D4E        5780     	CALL CALC_NEW_WAIT_TIMES
+15B2    11A9          5781     	CALL DECREMENT_STEPPER_STEP	
+                      5782     	; Check stepper step versus end criteria
+15B4    C3            5783     	CLR	C
+15B5    E550          5784     	MOV	A, WT_STEPPER_STEP_L
+15B7    9535          5785     	SUBB	A, STEPPER_STEP_END_L		; Minimum Stepper_Step_End
+15B9    E551          5786     	MOV	A, WT_STEPPER_STEP_H
+15BB    9536          5787     	SUBB	A, STEPPER_STEP_END_H
+15BD    400C          5788     	JC	STEPPER_ROT_EXIT			; Branch if lower than minimum
                       5789     
-                      5790     	; Go to the desired startup mode
-157E    7895          5791     MOV R0 , # PGM_STARTUP_METHOD 
-1580    E6            5792     MOV A , @ R0 
-1581    30E003        5793     	JNB	ACC.0, DIRECT_METHOD_START
-                      5794     
-1584    0215C8        5795     	JMP	STEPPER_METHOD_START
+                      5790     	; Wait for step
+15BF    310E          5791     	CALL STEPPER_TIMER_WAIT
+15C1    C3            5792     	CLR	C
+15C2    E559          5793     	MOV	A, NEW_RCP				; Load new pulse value
+15C4    9401          5794     SUBB A , # 1 
+15C6    5092          5795     	JNC	STEPPER_ROT_BEG
                       5796     
-                      5797     DIRECT_METHOD_START: 
-                      5798     	; Set up start operating conditions
-1587    7887          5799     MOV R0 , # PGM_PWM_FREQ 
-1589    E6            5800     MOV A , @ R0 
-158A    FE            5801     MOV R6 , A 
-158B    7602          5802     MOV @ R0 , # 2 
-158D    316E          5803     	CALL	DECODE_PARAMETERS		; (Decode_parameters uses Temp1 and Temp8)
-158F    7887          5804     MOV R0 , # PGM_PWM_FREQ 
-1591    EE            5805     MOV A , R6 
-1592    F6            5806     MOV @ R0 , A 
-                      5807     	; Set max allowed power
-1593    D261          5808     SETB FLAGS1 . 1 
-1595    C2AF          5809     	CLR	EA					; Disable interrupts to avoid that Requested_Pwm is overwritten
-1597    755EFF        5810     	MOV	PWM_LIMIT, #0FFH		; Set pwm limit to max
-159A    120C21        5811     	CALL SET_STARTUP_PWM
-159D    85225E        5812     	MOV	PWM_LIMIT, REQUESTED_PWM
-15A0    85225F        5813     	MOV	PWM_LIMIT_SPOOLUP, REQUESTED_PWM
-15A3    D2AF          5814     	SETB	EA
-15A5    C261          5815     CLR FLAGS1 . 1 
-15A7    752501        5816     	MOV	CURRENT_PWM_LIMITED, #1		; Set low pwm again after calling set_startup_pwm
-15AA    855D64        5817     	MOV	SPOOLUP_LIMIT_CNT, AUTO_BAILOUT_ARMED
-15AD    756501        5818     	MOV	SPOOLUP_LIMIT_SKIP, #1			
-                      5819     	; Begin startup sequence
-15B0    D260          5820     SETB FLAGS1 . 0 
-15B2    D263          5821     SETB FLAGS1 . 3 
-15B4    753800        5822     	MOV	DIRECT_STARTUP_OK_CNT, #0	; Reset ok counter
-15B7    120FF1        5823     	CALL COMM5COMM6				; Initialize commutation
-15BA    112C          5824     	CALL COMM6COMM1				
-15BC    120CCB        5825     	CALL	CALC_NEXT_COMM_TIMING		; Set virtual commutation point
-15BF    120C51        5826     	CALL INITIALIZE_ALL_TIMINGS		; Initialize timing
-15C2    120D4E        5827     	CALL CALC_NEW_WAIT_TIMES			; Calculate new wait times
-15C5    0216F0        5828     	JMP	RUN1
-                      5829     
-                      5830     
-                      5831     STEPPER_METHOD_START: 
-                      5832     	; Set up start operating conditions
-15C8    7887          5833     MOV R0 , # PGM_PWM_FREQ 
-15CA    E6            5834     MOV A , @ R0 
-15CB    FE            5835     MOV R6 , A 
-15CC    7603          5836     MOV @ R0 , # 3 
-15CE    7893          5837     MOV R0 , # PGM_DAMPING_FORCE 
-15D0    E6            5838     MOV A , @ R0 
-15D1    FD            5839     MOV R5 , A 
-15D2    7605          5840     MOV @ R0 , # 5 
-15D4    316E          5841     	CALL	DECODE_PARAMETERS		; (Decode_parameters uses Temp1 and Temp8)
-15D6    7887          5842     MOV R0 , # PGM_PWM_FREQ 
-15D8    EE            5843     MOV A , R6 
-15D9    F6            5844     MOV @ R0 , A 
-15DA    7893          5845     MOV R0 , # PGM_DAMPING_FORCE 
-15DC    ED            5846     MOV A , R5 
-15DD    F6            5847     MOV @ R0 , A 
-                      5848     	; Begin startup sequence
-15DE    D260          5849     SETB FLAGS1 . 0 
-15E0    D261          5850     SETB FLAGS1 . 1 
-15E2    D265          5851     SETB FLAGS1 . 5 
-15E4    120FF1        5852     	CALL COMM5COMM6			; Initialize commutation
-15E7    112C          5853     	CALL COMM6COMM1			
-15E9    755EFF        5854     	MOV	PWM_LIMIT, #0FFH		; Set pwm limit to max
-15EC    120C21        5855     	CALL SET_STARTUP_PWM
-15EF    1207EB        5856     	CALL WAIT1MS
-15F2    120EF9        5857     	CALL COMM1COMM2
-15F5    1207EB        5858     	CALL WAIT1MS
-15F8    1207EB        5859     	CALL WAIT1MS
-15FB    120F2B        5860     	CALL COMM2COMM3
-15FE    1207F0        5861     	CALL WAIT3MS			
-1601    120F75        5862     	CALL COMM3COMM4
-1604    1207F0        5863     	CALL WAIT3MS			
-1607    1207F0        5864     	CALL WAIT3MS			
-160A    120FB0        5865     	CALL COMM4COMM5
-160D    1207F5        5866     	CALL WAIT10MS				; Settle rotor
-1610    120FF1        5867     	CALL COMM5COMM6
-1613    1207F0        5868     	CALL WAIT3MS				
-1616    1207EB        5869     	CALL WAIT1MS			
-1619    C261          5870     CLR FLAGS1 . 1 
-161B    D262          5871     SETB FLAGS1 . 2 
-                      5872     
-                      5873     	;**** **** **** **** ****
-                      5874     	; Stepper phase beginning
-                      5875     	;**** **** **** **** **** 
-                      5876     STEPPER_ROT_BEG: 
-161D    120B6E        5877     	CALL START_ADC_CONVERSION
-1620    120B72        5878     	CALL CHECK_TEMP_VOLTAGE_AND_LIMIT_POWER
-1623    120C21        5879     	CALL SET_STARTUP_PWM
-1626    756C08        5880     MOV ADC_CONVERSION_CNT , # 8 
-                      5881     	SET_ADC_IP_TEMP
-1629    75BB10        5881+1   MOV AMX0P , # 10H  ; SELECT TEMP SENSOR INPUT
-                      5882     
-162C    112C          5883     	CALL COMM6COMM1				; Commutate
-162E    120CC4        5884     	CALL CALC_NEXT_COMM_TIMING_START	; Update timing and set timer
-1631    120D4E        5885     	CALL CALC_NEW_WAIT_TIMES
-1634    11A9          5886     	CALL DECREMENT_STEPPER_STEP
-1636    310E          5887     	CALL STEPPER_TIMER_WAIT
-                      5888     
-1638    120EF9        5889     	CALL COMM1COMM2			
-163B    120CC4        5890     	CALL CALC_NEXT_COMM_TIMING_START	
-163E    120D4E        5891     	CALL CALC_NEW_WAIT_TIMES
-1641    11A9          5892     	CALL DECREMENT_STEPPER_STEP
-1643    310E          5893     	CALL STEPPER_TIMER_WAIT
-                      5894     
-1645    120F2B        5895     	CALL COMM2COMM3			
-1648    120CC4        5896     	CALL CALC_NEXT_COMM_TIMING_START	
-164B    120D4E        5897     	CALL CALC_NEW_WAIT_TIMES
-164E    11A9          5898     	CALL DECREMENT_STEPPER_STEP
-1650    310E          5899     	CALL STEPPER_TIMER_WAIT
-                      5900     
-1652    120F75        5901     	CALL COMM3COMM4			
-1655    120CC4        5902     	CALL CALC_NEXT_COMM_TIMING_START	
-1658    120D4E        5903     	CALL CALC_NEW_WAIT_TIMES
-165B    11A9          5904     	CALL DECREMENT_STEPPER_STEP
-165D    310E          5905     	CALL STEPPER_TIMER_WAIT
+15C8    02175E        5797     	JMP	RUN_TO_WAIT_FOR_POWER_ON
+                      5798     
+                      5799     STEPPER_ROT_EXIT: 
+                      5800     	; Wait for step
+15CB    310E          5801     	CALL STEPPER_TIMER_WAIT
+                      5802     	; Clear stepper phase
+15CD    C262          5803     CLR FLAGS1 . 2 
+                      5804     	; Set dondamped low pwm frequency
+15CF    7887          5805     MOV R0 , # PGM_PWM_FREQ 
+15D1    E6            5806     MOV A , @ R0 
+15D2    FE            5807     MOV R6 , A 
+15D3    7602          5808     MOV @ R0 , # 2 
+15D5    316E          5809     	CALL	DECODE_PARAMETERS			; (Decode_parameters uses Temp1 and Temp8)
+15D7    7887          5810     MOV R0 , # PGM_PWM_FREQ 
+15D9    EE            5811     MOV A , R6 
+15DA    F6            5812     MOV @ R0 , A 
+                      5813     	; Set spoolup power variables (power is now controlled from RCP)
+15DB    85225E        5814     	MOV	PWM_LIMIT, REQUESTED_PWM
+15DE    85605F        5815     	MOV	PWM_LIMIT_SPOOLUP, PWM_SPOOLUP_BEG
+15E1    856025        5816     	MOV	CURRENT_PWM_LIMITED, PWM_SPOOLUP_BEG
+15E4    855D64        5817     	MOV	SPOOLUP_LIMIT_CNT, AUTO_BAILOUT_ARMED
+15E7    756501        5818     	MOV	SPOOLUP_LIMIT_SKIP, #1			
+                      5819     	; Set direct startup phase to acquire sync quickly
+15EA    D263          5820     SETB FLAGS1 . 3 
+15EC    753800        5821     	MOV	DIRECT_STARTUP_OK_CNT, #0	; Reset ok counter
+15EF    C2AF          5822     	CLR	EA						; Disable interrupts
+                      5823     	APFET_OFF						; Ap off. Turn off unused pfets (to turn off damping fets that might be on)
+15F1    207502        5823+1   JB FLAGS3 . 5 , ( $+5 ) 
+15F4    C293          5823+1   CLR P1 . 3 
+15F6    307502        5823+1   JNB FLAGS3 . 5 , ( $+5 ) 
+15F9    C297          5823+1   CLR P1 . 7 
+                      5824     	CPFET_OFF						; Cp off
+15FB    207502        5824+1   JB FLAGS3 . 5 , ( $+5 ) 
+15FE    C297          5824+1   CLR P1 . 7 
+1600    307502        5824+1   JNB FLAGS3 . 5 , ( $+5 ) 
+1603    C293          5824+1   CLR P1 . 3 
+1605    742D          5825     	MOV	A, #45					; 8us delay for pfets to go off
+1607    D5E0FD        5826     	DJNZ	ACC, $
+160A    D2AF          5827     	SETB	EA						; Enable interrupts
+160C    112C          5828     	CALL COMM6COMM1				
+160E    120CCB        5829     	CALL CALC_NEXT_COMM_TIMING		; Calculate next timing and start advance timing wait
+1611    120D3A        5830     	CALL WAIT_ADVANCE_TIMING			; Wait advance timing and start zero cross wait
+1614    120D4E        5831     	CALL CALC_NEW_WAIT_TIMES
+1617    120DDF        5832     	CALL WAIT_BEFORE_ZC_SCAN			; Wait zero cross wait and start zero cross timeout
+161A    756C00        5833     	MOV	ADC_CONVERSION_CNT, #0		; Make sure a voltage reading is done next time
+                      5834     	SET_ADC_IP_VOLT				; Set adc measurement to voltage
+161D    75BB09        5834+1   MOV AMX0P , # ( 8+ADC_IP )  ; SELECT POSITIVE INPUT
+1620    02162D        5835     	JMP	RUN1
+                      5836     
+                      5837     
+                      5838     
+                      5839     ;**** **** **** **** **** **** **** **** **** **** **** **** ****
+                      5840     ;
+                      5841     ; Run entry point
+                      5842     ;
+                      5843     ;**** **** **** **** **** **** **** **** **** **** **** **** ****
+                      5844     DAMPED_TRANSITION: 
+                      5845     	; Transition from nondamped to damped if applicable
+1623    316E          5846     	CALL	DECODE_PARAMETERS		; Set programmed parameters
+1625    112C          5847     	CALL	COMM6COMM1
+1627    756C00        5848     	MOV	ADC_CONVERSION_CNT, #0	; Make sure a voltage reading is done next time
+                      5849     	SET_ADC_IP_VOLT			; Set adc measurement to voltage
+162A    75BB09        5849+1   MOV AMX0P , # ( 8+ADC_IP )  ; SELECT POSITIVE INPUT
+                      5850     
+                      5851     ; Run 1 = B(p-on) + C(n-pwm) - comparator A evaluated
+                      5852     ; Out_cA changes from low to high
+                      5853     RUN1: 
+162D    120E01        5854     	CALL WAIT_FOR_COMP_OUT_HIGH	; Wait zero cross wait and wait for high
+1630    120E86        5855     	CALL	EVALUATE_COMPARATOR_INTEGRITY	; Check whether comparator reading has been normal
+1633    120EB1        5856     	CALL SETUP_COMM_WAIT		; Setup wait time from zero cross to commutation
+1636    12091A        5857     	CALL CALC_GOVERNOR_TARGET	; Calculate governor target
+1639    120EC5        5858     	CALL WAIT_FOR_COMM			; Wait from zero cross to commutation
+163C    120EF9        5859     	CALL COMM1COMM2			; Commutate
+163F    120CCB        5860     	CALL CALC_NEXT_COMM_TIMING	; Calculate next timing and start advance timing wait
+1642    120D3A        5861     	CALL WAIT_ADVANCE_TIMING		; Wait advance timing and start zero cross wait
+1645    120D4E        5862     	CALL CALC_NEW_WAIT_TIMES
+1648    120DDF        5863     	CALL WAIT_BEFORE_ZC_SCAN		; Wait zero cross wait and start zero cross timeout
+                      5864     
+                      5865     ; Run 2 = A(p-on) + C(n-pwm) - comparator B evaluated
+                      5866     ; Out_cB changes from high to low
+                      5867     RUN2: 
+164B    120DF8        5868     	CALL WAIT_FOR_COMP_OUT_LOW
+164E    120E86        5869     	CALL	EVALUATE_COMPARATOR_INTEGRITY
+1651    120EB1        5870     	CALL SETUP_COMM_WAIT	
+1654    120977        5871     	CALL CALC_GOVERNOR_PROP_ERROR
+1657    120EC5        5872     	CALL WAIT_FOR_COMM
+165A    120F2B        5873     	CALL COMM2COMM3
+165D    120CCB        5874     	CALL CALC_NEXT_COMM_TIMING
+1660    120D3A        5875     	CALL WAIT_ADVANCE_TIMING
+1663    120D4E        5876     	CALL CALC_NEW_WAIT_TIMES
+1666    120DDF        5877     	CALL WAIT_BEFORE_ZC_SCAN	
+                      5878     
+                      5879     ; Run 3 = A(p-on) + B(n-pwm) - comparator C evaluated
+                      5880     ; Out_cC changes from low to high
+                      5881     RUN3: 
+1669    120E01        5882     	CALL WAIT_FOR_COMP_OUT_HIGH
+166C    120E86        5883     	CALL	EVALUATE_COMPARATOR_INTEGRITY
+166F    120EB1        5884     	CALL SETUP_COMM_WAIT	
+1672    1209B0        5885     	CALL CALC_GOVERNOR_INT_ERROR
+1675    120EC5        5886     	CALL WAIT_FOR_COMM
+1678    120F75        5887     	CALL COMM3COMM4
+167B    120CCB        5888     	CALL CALC_NEXT_COMM_TIMING
+167E    120D3A        5889     	CALL WAIT_ADVANCE_TIMING
+1681    120D4E        5890     	CALL CALC_NEW_WAIT_TIMES
+1684    120DDF        5891     	CALL WAIT_BEFORE_ZC_SCAN	
+                      5892     
+                      5893     ; Run 4 = C(p-on) + B(n-pwm) - comparator A evaluated
+                      5894     ; Out_cA changes from high to low
+                      5895     RUN4: 
+1687    120DF8        5896     	CALL WAIT_FOR_COMP_OUT_LOW
+168A    120E86        5897     	CALL	EVALUATE_COMPARATOR_INTEGRITY
+168D    120EB1        5898     	CALL SETUP_COMM_WAIT	
+1690    120A0D        5899     	CALL CALC_GOVERNOR_PROP_CORRECTION
+1693    120EC5        5900     	CALL WAIT_FOR_COMM
+1696    120FB0        5901     	CALL COMM4COMM5
+1699    120CCB        5902     	CALL CALC_NEXT_COMM_TIMING
+169C    120D3A        5903     	CALL WAIT_ADVANCE_TIMING
+169F    120D4E        5904     	CALL CALC_NEW_WAIT_TIMES
+16A2    120DDF        5905     	CALL WAIT_BEFORE_ZC_SCAN	
                       5906     
-165F    120FB0        5907     	CALL COMM4COMM5			
-1662    120CC4        5908     	CALL CALC_NEXT_COMM_TIMING_START	
-1665    120D4E        5909     	CALL CALC_NEW_WAIT_TIMES
-1668    11A9          5910     	CALL DECREMENT_STEPPER_STEP
-166A    310E          5911     	CALL STEPPER_TIMER_WAIT
-                      5912     
-166C    120FF1        5913     	CALL COMM5COMM6			
-166F    120CC4        5914     	CALL CALC_NEXT_COMM_TIMING_START	
-1672    120D4E        5915     	CALL CALC_NEW_WAIT_TIMES
-1675    11A9          5916     	CALL DECREMENT_STEPPER_STEP	
-                      5917     	; Check stepper step versus end criteria
-1677    C3            5918     	CLR	C
-1678    E550          5919     	MOV	A, WT_STEPPER_STEP_L
-167A    9535          5920     	SUBB	A, STEPPER_STEP_END_L		; Minimum Stepper_Step_End
-167C    E551          5921     	MOV	A, WT_STEPPER_STEP_H
-167E    9536          5922     	SUBB	A, STEPPER_STEP_END_H
-1680    400C          5923     	JC	STEPPER_ROT_EXIT			; Branch if lower than minimum
-                      5924     
-                      5925     	; Wait for step
-1682    310E          5926     	CALL STEPPER_TIMER_WAIT
-1684    C3            5927     	CLR	C
-1685    E559          5928     	MOV	A, NEW_RCP				; Load new pulse value
-1687    9401          5929     SUBB A , # 1 
-1689    5092          5930     	JNC	STEPPER_ROT_BEG
-                      5931     
-168B    021822        5932     	JMP	RUN_TO_WAIT_FOR_POWER_ON
-                      5933     
-                      5934     STEPPER_ROT_EXIT: 
-                      5935     	; Wait for step
-168E    310E          5936     	CALL STEPPER_TIMER_WAIT
-                      5937     	; Clear stepper phase
-1690    C262          5938     CLR FLAGS1 . 2 
-                      5939     	; Set dondamped low pwm frequency
-1692    7887          5940     MOV R0 , # PGM_PWM_FREQ 
-1694    E6            5941     MOV A , @ R0 
-1695    FE            5942     MOV R6 , A 
-1696    7602          5943     MOV @ R0 , # 2 
-1698    316E          5944     	CALL	DECODE_PARAMETERS			; (Decode_parameters uses Temp1 and Temp8)
-169A    7887          5945     MOV R0 , # PGM_PWM_FREQ 
-169C    EE            5946     MOV A , R6 
-169D    F6            5947     MOV @ R0 , A 
-                      5948     	; Set spoolup power variables (power is now controlled from RCP)
-169E    85225E        5949     	MOV	PWM_LIMIT, REQUESTED_PWM
-16A1    85605F        5950     	MOV	PWM_LIMIT_SPOOLUP, PWM_SPOOLUP_BEG
-16A4    856025        5951     	MOV	CURRENT_PWM_LIMITED, PWM_SPOOLUP_BEG
-16A7    855D64        5952     	MOV	SPOOLUP_LIMIT_CNT, AUTO_BAILOUT_ARMED
-16AA    756501        5953     	MOV	SPOOLUP_LIMIT_SKIP, #1			
-                      5954     	; Set direct startup phase to acquire sync quickly
-16AD    D263          5955     SETB FLAGS1 . 3 
-16AF    753800        5956     	MOV	DIRECT_STARTUP_OK_CNT, #0	; Reset ok counter
-16B2    C2AF          5957     	CLR	EA						; Disable interrupts
-                      5958     	APFET_OFF						; Ap off. Turn off unused pfets (to turn off damping fets that might be on)
-16B4    207502        5958+1   JB FLAGS3 . 5 , ( $+5 ) 
-16B7    C293          5958+1   CLR P1 . 3 
-16B9    307502        5958+1   JNB FLAGS3 . 5 , ( $+5 ) 
-16BC    C297          5958+1   CLR P1 . 7 
-                      5959     	CPFET_OFF						; Cp off
-16BE    207502        5959+1   JB FLAGS3 . 5 , ( $+5 ) 
-16C1    C297          5959+1   CLR P1 . 7 
-16C3    307502        5959+1   JNB FLAGS3 . 5 , ( $+5 ) 
-16C6    C293          5959+1   CLR P1 . 3 
-16C8    742D          5960     	MOV	A, #45					; 8us delay for pfets to go off
-16CA    D5E0FD        5961     	DJNZ	ACC, $
-16CD    D2AF          5962     	SETB	EA						; Enable interrupts
-16CF    112C          5963     	CALL COMM6COMM1				
-16D1    120CCB        5964     	CALL CALC_NEXT_COMM_TIMING		; Calculate next timing and start advance timing wait
-16D4    120D3A        5965     	CALL WAIT_ADVANCE_TIMING			; Wait advance timing and start zero cross wait
-16D7    120D4E        5966     	CALL CALC_NEW_WAIT_TIMES
-16DA    120DDF        5967     	CALL WAIT_BEFORE_ZC_SCAN			; Wait zero cross wait and start zero cross timeout
-16DD    756C00        5968     	MOV	ADC_CONVERSION_CNT, #0		; Make sure a voltage reading is done next time
-                      5969     	SET_ADC_IP_VOLT				; Set adc measurement to voltage
-16E0    75BB09        5969+1   MOV AMX0P , # ( 8+ADC_IP )  ; SELECT POSITIVE INPUT
-16E3    0216F0        5970     	JMP	RUN1
-                      5971     
-                      5972     
-                      5973     
-                      5974     ;**** **** **** **** **** **** **** **** **** **** **** **** ****
-                      5975     ;
-                      5976     ; Run entry point
-                      5977     ;
-                      5978     ;**** **** **** **** **** **** **** **** **** **** **** **** ****
-                      5979     DAMPED_TRANSITION: 
-                      5980     	; Transition from nondamped to damped if applicable
-16E6    316E          5981     	CALL	DECODE_PARAMETERS		; Set programmed parameters
-16E8    112C          5982     	CALL	COMM6COMM1
-16EA    756C00        5983     	MOV	ADC_CONVERSION_CNT, #0	; Make sure a voltage reading is done next time
-                      5984     	SET_ADC_IP_VOLT			; Set adc measurement to voltage
-16ED    75BB09        5984+1   MOV AMX0P , # ( 8+ADC_IP )  ; SELECT POSITIVE INPUT
-                      5985     
-                      5986     ; Run 1 = B(p-on) + C(n-pwm) - comparator A evaluated
-                      5987     ; Out_cA changes from low to high
-                      5988     RUN1: 
-16F0    120E01        5989     	CALL WAIT_FOR_COMP_OUT_HIGH	; Wait zero cross wait and wait for high
-16F3    120E86        5990     	CALL	EVALUATE_COMPARATOR_INTEGRITY	; Check whether comparator reading has been normal
-16F6    120EB1        5991     	CALL SETUP_COMM_WAIT		; Setup wait time from zero cross to commutation
-16F9    12091A        5992     	CALL CALC_GOVERNOR_TARGET	; Calculate governor target
-16FC    120EC5        5993     	CALL WAIT_FOR_COMM			; Wait from zero cross to commutation
-16FF    120EF9        5994     	CALL COMM1COMM2			; Commutate
-1702    120CCB        5995     	CALL CALC_NEXT_COMM_TIMING	; Calculate next timing and start advance timing wait
-1705    120D3A        5996     	CALL WAIT_ADVANCE_TIMING		; Wait advance timing and start zero cross wait
-1708    120D4E        5997     	CALL CALC_NEW_WAIT_TIMES
-170B    120DDF        5998     	CALL WAIT_BEFORE_ZC_SCAN		; Wait zero cross wait and start zero cross timeout
-                      5999     
-                      6000     ; Run 2 = A(p-on) + C(n-pwm) - comparator B evaluated
-                      6001     ; Out_cB changes from high to low
-                      6002     RUN2: 
-170E    120DF8        6003     	CALL WAIT_FOR_COMP_OUT_LOW
-1711    120E86        6004     	CALL	EVALUATE_COMPARATOR_INTEGRITY
-1714    120EB1        6005     	CALL SETUP_COMM_WAIT	
-1717    120977        6006     	CALL CALC_GOVERNOR_PROP_ERROR
-171A    120EC5        6007     	CALL WAIT_FOR_COMM
-171D    120F2B        6008     	CALL COMM2COMM3
-1720    120CCB        6009     	CALL CALC_NEXT_COMM_TIMING
-1723    120D3A        6010     	CALL WAIT_ADVANCE_TIMING
-1726    120D4E        6011     	CALL CALC_NEW_WAIT_TIMES
-1729    120DDF        6012     	CALL WAIT_BEFORE_ZC_SCAN	
-                      6013     
-                      6014     ; Run 3 = A(p-on) + B(n-pwm) - comparator C evaluated
-                      6015     ; Out_cC changes from low to high
-                      6016     RUN3: 
-172C    120E01        6017     	CALL WAIT_FOR_COMP_OUT_HIGH
-172F    120E86        6018     	CALL	EVALUATE_COMPARATOR_INTEGRITY
-1732    120EB1        6019     	CALL SETUP_COMM_WAIT	
-1735    1209B0        6020     	CALL CALC_GOVERNOR_INT_ERROR
-1738    120EC5        6021     	CALL WAIT_FOR_COMM
-173B    120F75        6022     	CALL COMM3COMM4
-173E    120CCB        6023     	CALL CALC_NEXT_COMM_TIMING
-1741    120D3A        6024     	CALL WAIT_ADVANCE_TIMING
-1744    120D4E        6025     	CALL CALC_NEW_WAIT_TIMES
-1747    120DDF        6026     	CALL WAIT_BEFORE_ZC_SCAN	
-                      6027     
-                      6028     ; Run 4 = C(p-on) + B(n-pwm) - comparator A evaluated
-                      6029     ; Out_cA changes from high to low
-                      6030     RUN4: 
-174A    120DF8        6031     	CALL WAIT_FOR_COMP_OUT_LOW
-174D    120E86        6032     	CALL	EVALUATE_COMPARATOR_INTEGRITY
-1750    120EB1        6033     	CALL SETUP_COMM_WAIT	
-1753    120A0D        6034     	CALL CALC_GOVERNOR_PROP_CORRECTION
-1756    120EC5        6035     	CALL WAIT_FOR_COMM
-1759    120FB0        6036     	CALL COMM4COMM5
-175C    120CCB        6037     	CALL CALC_NEXT_COMM_TIMING
-175F    120D3A        6038     	CALL WAIT_ADVANCE_TIMING
-1762    120D4E        6039     	CALL CALC_NEW_WAIT_TIMES
-1765    120DDF        6040     	CALL WAIT_BEFORE_ZC_SCAN	
-                      6041     
-                      6042     ; Run 5 = C(p-on) + A(n-pwm) - comparator B evaluated
-                      6043     ; Out_cB changes from low to high
-                      6044     RUN5: 
-1768    120E01        6045     	CALL WAIT_FOR_COMP_OUT_HIGH
-176B    120E86        6046     	CALL	EVALUATE_COMPARATOR_INTEGRITY
-176E    120EB1        6047     	CALL SETUP_COMM_WAIT	
-1771    120A71        6048     	CALL CALC_GOVERNOR_INT_CORRECTION
-1774    120EC5        6049     	CALL WAIT_FOR_COMM
-1777    120FF1        6050     	CALL COMM5COMM6
-177A    120CCB        6051     	CALL CALC_NEXT_COMM_TIMING
-177D    120D3A        6052     	CALL WAIT_ADVANCE_TIMING
-1780    120D4E        6053     	CALL CALC_NEW_WAIT_TIMES
-1783    120DDF        6054     	CALL WAIT_BEFORE_ZC_SCAN	
-                      6055     
-                      6056     ; Run 6 = B(p-on) + A(n-pwm) - comparator C evaluated
-                      6057     ; Out_cC changes from high to low
-                      6058     RUN6: 
-1786    120DF8        6059     	CALL WAIT_FOR_COMP_OUT_LOW
-1789    120B6E        6060     	CALL START_ADC_CONVERSION
-178C    120E86        6061     	CALL	EVALUATE_COMPARATOR_INTEGRITY
-178F    120EB1        6062     	CALL SETUP_COMM_WAIT	
-1792    120B72        6063     	CALL CHECK_TEMP_VOLTAGE_AND_LIMIT_POWER
-1795    120EC5        6064     	CALL WAIT_FOR_COMM
-1798    112C          6065     	CALL COMM6COMM1
-179A    120CCB        6066     	CALL CALC_NEXT_COMM_TIMING
-179D    120D3A        6067     	CALL WAIT_ADVANCE_TIMING
-17A0    120D4E        6068     	CALL CALC_NEW_WAIT_TIMES
-17A3    120DDF        6069     	CALL WAIT_BEFORE_ZC_SCAN	
-                      6070     
-                      6071     	; Check if it is direct startup
-17A6    306342        6072     JNB FLAGS1 . 3 , NORMAL_RUN_CHECKS 
-                      6073     
-                      6074     	; Set spoolup power variables
-17A9    85605E        6075     	MOV	PWM_LIMIT, PWM_SPOOLUP_BEG		; Set initial max power
-17AC    85605F        6076     	MOV	PWM_LIMIT_SPOOLUP, PWM_SPOOLUP_BEG	; Set initial slow spoolup power
-17AF    855D64        6077     	MOV	SPOOLUP_LIMIT_CNT, AUTO_BAILOUT_ARMED
-17B2    756501        6078     	MOV	SPOOLUP_LIMIT_SKIP, #1			
-                      6079     	; Check startup ok counter
-17B5    7964          6080     MOV R1 , # 100 
-17B7    7A14          6081     MOV R2 , # 20 
-                      6082     IF MODE >= 1	; Tail or multi
-17B9    7888          6083     MOV R0 , # PGM_DIRECTION 
-17BB    E6            6084     MOV A , @ R0 
-17BC    B40304        6085     	CJNE	A, #3, DIRECT_START_PARAMS_SET; No - branch
-                      6086     
-17BF    791E          6087     MOV R1 , # 30 
-17C1    7A05          6088     MOV R2 , # 5 
-                      6089     
-                      6090     DIRECT_START_PARAMS_SET: 
-                      6091     ENDIF
-17C3    C3            6092     	CLR	C
-17C4    E538          6093     	MOV	A, DIRECT_STARTUP_OK_CNT		; Load ok counter
-17C6    99            6094     SUBB A , R1 
-17C7    4015          6095     	JC	DIRECT_START_CHECK_RCP		; No - proceed
-                      6096     
-17C9    C263          6097     CLR FLAGS1 . 3 
-17CB    D264          6098     SETB FLAGS1 . 4 
-17CD    8A37          6099     MOV STARTUP_ROT_CNT , R2 
-                      6100     IF MODE == 1	; Tail
+                      5907     ; Run 5 = C(p-on) + A(n-pwm) - comparator B evaluated
+                      5908     ; Out_cB changes from low to high
+                      5909     RUN5: 
+16A5    120E01        5910     	CALL WAIT_FOR_COMP_OUT_HIGH
+16A8    120E86        5911     	CALL	EVALUATE_COMPARATOR_INTEGRITY
+16AB    120EB1        5912     	CALL SETUP_COMM_WAIT	
+16AE    120A71        5913     	CALL CALC_GOVERNOR_INT_CORRECTION
+16B1    120EC5        5914     	CALL WAIT_FOR_COMM
+16B4    120FF1        5915     	CALL COMM5COMM6
+16B7    120CCB        5916     	CALL CALC_NEXT_COMM_TIMING
+16BA    120D3A        5917     	CALL WAIT_ADVANCE_TIMING
+16BD    120D4E        5918     	CALL CALC_NEW_WAIT_TIMES
+16C0    120DDF        5919     	CALL WAIT_BEFORE_ZC_SCAN	
+                      5920     
+                      5921     ; Run 6 = B(p-on) + A(n-pwm) - comparator C evaluated
+                      5922     ; Out_cC changes from high to low
+                      5923     RUN6: 
+16C3    120DF8        5924     	CALL WAIT_FOR_COMP_OUT_LOW
+16C6    120B6E        5925     	CALL START_ADC_CONVERSION
+16C9    120E86        5926     	CALL	EVALUATE_COMPARATOR_INTEGRITY
+16CC    120EB1        5927     	CALL SETUP_COMM_WAIT	
+16CF    120B72        5928     	CALL CHECK_TEMP_VOLTAGE_AND_LIMIT_POWER
+16D2    120EC5        5929     	CALL WAIT_FOR_COMM
+16D5    112C          5930     	CALL COMM6COMM1
+16D7    120CCB        5931     	CALL CALC_NEXT_COMM_TIMING
+16DA    120D3A        5932     	CALL WAIT_ADVANCE_TIMING
+16DD    120D4E        5933     	CALL CALC_NEW_WAIT_TIMES
+16E0    120DDF        5934     	CALL WAIT_BEFORE_ZC_SCAN	
+                      5935     
+                      5936     	; Check if it is direct startup
+16E3    306342        5937     JNB FLAGS1 . 3 , NORMAL_RUN_CHECKS 
+                      5938     
+                      5939     	; Set spoolup power variables
+16E6    85605E        5940     	MOV	PWM_LIMIT, PWM_SPOOLUP_BEG		; Set initial max power
+16E9    85605F        5941     	MOV	PWM_LIMIT_SPOOLUP, PWM_SPOOLUP_BEG	; Set initial slow spoolup power
+16EC    855D64        5942     	MOV	SPOOLUP_LIMIT_CNT, AUTO_BAILOUT_ARMED
+16EF    756501        5943     	MOV	SPOOLUP_LIMIT_SKIP, #1			
+                      5944     	; Check startup ok counter
+16F2    7964          5945     MOV R1 , # 100 
+16F4    7A14          5946     MOV R2 , # 20 
+                      5947     IF MODE >= 1	; Tail or multi
+16F6    7888          5948     MOV R0 , # PGM_DIRECTION 
+16F8    E6            5949     MOV A , @ R0 
+16F9    B40304        5950     	CJNE	A, #3, DIRECT_START_PARAMS_SET; No - branch
+                      5951     
+16FC    791E          5952     MOV R1 , # 30 
+16FE    7A05          5953     MOV R2 , # 5 
+                      5954     
+                      5955     DIRECT_START_PARAMS_SET: 
+                      5956     ENDIF
+1700    C3            5957     	CLR	C
+1701    E538          5958     	MOV	A, DIRECT_STARTUP_OK_CNT		; Load ok counter
+1703    99            5959     SUBB A , R1 
+1704    4015          5960     	JC	DIRECT_START_CHECK_RCP		; No - proceed
+                      5961     
+1706    C263          5962     CLR FLAGS1 . 3 
+1708    D264          5963     SETB FLAGS1 . 4 
+170A    8A37          5964     MOV STARTUP_ROT_CNT , R2 
+                      5965     IF MODE == 1	; Tail
                                	MOV	PWM_LIMIT, #0FFH			; Allow full power
                                	MOV	PWM_LIMIT_SPOOLUP, #0FFH	
                                ENDIF
-                      6104     IF MODE == 2	; Multi
-17CF    7888          6105     MOV R0 , # PGM_DIRECTION 
-17D1    E6            6106     MOV A , @ R0 
-17D2    B40306        6107     	CJNE	A, #3, DIRECT_START_PWM_LIM_SET
-                      6108     
-17D5    755EFF        6109     	MOV	PWM_LIMIT, #0FFH			; Allow full power in bidirectional operation
-17D8    755FFF        6110     	MOV	PWM_LIMIT_SPOOLUP, #0FFH	
-                      6111     
-                      6112     DIRECT_START_PWM_LIM_SET: 
-                      6113     ENDIF
-17DB    0217EB        6114     	JMP	NORMAL_RUN_CHECKS
-                      6115     
-                      6116     DIRECT_START_CHECK_RCP: 
-17DE    C3            6117     	CLR	C
-17DF    E559          6118     	MOV	A, NEW_RCP				; Load new pulse value
-17E1    9401          6119     SUBB A , # 1 
-17E3    4003          6120     	JC	($+5)
-                      6121     
-17E5    0216F0        6122     	LJMP	RUN1						; Continue to run 
-                      6123     
-17E8    021822        6124     	JMP	RUN_TO_WAIT_FOR_POWER_ON
-                      6125     
-                      6126     
-                      6127     NORMAL_RUN_CHECKS: 
-                      6128     	; Check if it is initial run phase
-17EB    306419        6129     JNB FLAGS1 . 4 , INITIAL_RUN_PHASE_DONE 
-                      6130     
-                      6131     	; Decrement startup rotaton count
-17EE    E537          6132     	MOV	A, STARTUP_ROT_CNT
-17F0    14            6133     	DEC	A
-                      6134     	; Check number of nondamped rotations
-17F1    7005          6135     	JNZ 	NORMAL_RUN_CHECK_STARTUP_ROT	; Branch if counter is not zero
-                      6136     
-17F3    C264          6137     CLR FLAGS1 . 4 
-17F5    0216E6        6138     	LJMP DAMPED_TRANSITION			; Do damped transition if counter is zero
-                      6139     
-                      6140     NORMAL_RUN_CHECK_STARTUP_ROT: 
-17F8    F537          6141     	MOV	STARTUP_ROT_CNT, A			; Not zero - store counter
-                      6142     
-17FA    C3            6143     	CLR	C
-17FB    E559          6144     	MOV	A, NEW_RCP				; Load new pulse value
-17FD    9401          6145     SUBB A , # 1 
-17FF    4003          6146     	JC	($+5)
-                      6147     
-1801    0216F0        6148     	LJMP	RUN1						; Continue to run 
-                      6149     
-1804    021822        6150     	JMP	RUN_TO_WAIT_FOR_POWER_ON
-                      6151     
-                      6152     
-                      6153     INITIAL_RUN_PHASE_DONE: 
-                      6154     IF MODE == 0	; Main
+                      5969     IF MODE == 2	; Multi
+170C    7888          5970     MOV R0 , # PGM_DIRECTION 
+170E    E6            5971     MOV A , @ R0 
+170F    B40306        5972     	CJNE	A, #3, DIRECT_START_PWM_LIM_SET
+                      5973     
+1712    755EFF        5974     	MOV	PWM_LIMIT, #0FFH			; Allow full power in bidirectional operation
+1715    755FFF        5975     	MOV	PWM_LIMIT_SPOOLUP, #0FFH	
+                      5976     
+                      5977     DIRECT_START_PWM_LIM_SET: 
+                      5978     ENDIF
+1718    021728        5979     	JMP	NORMAL_RUN_CHECKS
+                      5980     
+                      5981     DIRECT_START_CHECK_RCP: 
+171B    C3            5982     	CLR	C
+171C    E559          5983     	MOV	A, NEW_RCP				; Load new pulse value
+171E    9401          5984     SUBB A , # 1 
+1720    4003          5985     	JC	($+5)
+                      5986     
+1722    02162D        5987     	LJMP	RUN1						; Continue to run 
+                      5988     
+1725    02175E        5989     	JMP	RUN_TO_WAIT_FOR_POWER_ON
+                      5990     
+                      5991     
+                      5992     NORMAL_RUN_CHECKS: 
+                      5993     	; Check if it is initial run phase
+1728    306419        5994     JNB FLAGS1 . 4 , INITIAL_RUN_PHASE_DONE 
+                      5995     
+                      5996     	; Decrement startup rotaton count
+172B    E537          5997     	MOV	A, STARTUP_ROT_CNT
+172D    14            5998     	DEC	A
+                      5999     	; Check number of nondamped rotations
+172E    7005          6000     	JNZ 	NORMAL_RUN_CHECK_STARTUP_ROT	; Branch if counter is not zero
+                      6001     
+1730    C264          6002     CLR FLAGS1 . 4 
+1732    021623        6003     	LJMP DAMPED_TRANSITION			; Do damped transition if counter is zero
+                      6004     
+                      6005     NORMAL_RUN_CHECK_STARTUP_ROT: 
+1735    F537          6006     	MOV	STARTUP_ROT_CNT, A			; Not zero - store counter
+                      6007     
+1737    C3            6008     	CLR	C
+1738    E559          6009     	MOV	A, NEW_RCP				; Load new pulse value
+173A    9401          6010     SUBB A , # 1 
+173C    4003          6011     	JC	($+5)
+                      6012     
+173E    02162D        6013     	LJMP	RUN1						; Continue to run 
+                      6014     
+1741    02175E        6015     	JMP	RUN_TO_WAIT_FOR_POWER_ON
+                      6016     
+                      6017     
+                      6018     INITIAL_RUN_PHASE_DONE: 
+                      6019     IF MODE == 0	; Main
                                	; Check if throttle is zeroed
                                	CLR	C
                                	MOV	A, RCP_STOP_CNT			; Load stop RC pulse counter value
@@ -6031,50 +5896,50 @@ LOC     OBJ           LINE    SOURCE
                                
                                RUN6_CHECK_RCP_STOP_COUNT:
                                ENDIF
-                      6167     	; Exit run loop after a given time
-1807    C3            6168     	CLR	C
-1808    E55C          6169     	MOV	A, RCP_STOP_CNT			; Load stop RC pulse counter low byte value
-180A    94FA          6170     SUBB A , # 250 
-180C    5014          6171     	JNC	RUN_TO_WAIT_FOR_POWER_ON		; Yes, go back to wait for poweron
-                      6172     
-                      6173     RUN6_CHECK_RCP_TIMEOUT: 
-180E    741F          6174     	MOV	A, #((1 SHL RCP_PWM_FREQ_1KHZ)+(1 SHL RCP_PWM_FREQ_2KHZ)+(1 SHL RCP_PWM_FREQ_4KHZ)+(1 SHL RCP_PWM_FREQ_8KHZ)+(1 SHL RCP_PWM_FREQ_12KHZ))
-1810    552E          6175     	ANL	A, FLAGS3					; Check pwm frequency flags
-1812    7004          6176     	JNZ	RUN6_CHECK_SPEED			; If a flag is set (PWM) - branch
-                      6177     
-1814    E528          6178     	MOV	A, RCP_TIMEOUT_CNT			; Load RC pulse timeout counter value
-1816    600A          6179     	JZ	RUN_TO_WAIT_FOR_POWER_ON		; If it is zero - go back to wait for poweron
-                      6180     
-                      6181     RUN6_CHECK_SPEED: 
-1818    C3            6182     	CLR	C
-1819    E53D          6183     	MOV	A, COMM_PERIOD4X_H			; Is Comm_Period4x more than 32ms (~1220 eRPM)?
-181B    94F0          6184     	SUBB	A, #0F0H
-181D    5003          6185     	JNC	RUN_TO_WAIT_FOR_POWER_ON		; Yes - go back to motor start
-181F    0216F0        6186     	JMP	RUN1						; Go back to run 1
-                      6187     
-                      6188     
-                      6189     RUN_TO_WAIT_FOR_POWER_ON: 	
-1822    C2AF          6190     	CLR	EA
-1824    121097        6191     	CALL SWITCH_POWER_OFF
-1827    7887          6192     MOV R0 , # PGM_PWM_FREQ 
-1829    E6            6193     MOV A , @ R0 
-182A    FE            6194     MOV R6 , A 
-182B    7602          6195     MOV @ R0 , # 2 
-182D    12116E        6196     	CALL	DECODE_PARAMETERS			; (Decode_parameters uses Temp1 and Temp8)
-1830    7887          6197     MOV R0 , # PGM_PWM_FREQ 
-1832    EE            6198     MOV A , R6 
-1833    F6            6199     MOV @ R0 , A 
-1834    E4            6200     	CLR	A
-1835    F522          6201     	MOV	REQUESTED_PWM, A			; Set requested pwm to zero
-1837    F523          6202     	MOV	GOVERNOR_REQ_PWM, A			; Set governor requested pwm to zero
-1839    F524          6203     	MOV	CURRENT_PWM, A				; Set current pwm to zero
-183B    F525          6204     	MOV	CURRENT_PWM_LIMITED, A		; Set limited current pwm to zero
-183D    F561          6205     	MOV	PWM_MOTOR_IDLE, A			; Set motor idle to zero
-183F    C260          6206     CLR FLAGS1 . 0 
-1841    D2AF          6207     	SETB	EA
-1843    1207EB        6208     	CALL	WAIT1MS					; Wait for pwm to be stopped
-1846    121097        6209     	CALL SWITCH_POWER_OFF
-                      6210     IF MODE == 0	; Main
+                      6032     	; Exit run loop after a given time
+1744    C3            6033     	CLR	C
+1745    E55C          6034     	MOV	A, RCP_STOP_CNT			; Load stop RC pulse counter low byte value
+1747    94FA          6035     SUBB A , # 250 
+1749    5013          6036     	JNC	RUN_TO_WAIT_FOR_POWER_ON		; Yes, go back to wait for poweron
+                      6037     
+                      6038     RUN6_CHECK_RCP_TIMEOUT: 
+174B    741F          6039     	MOV	A, #((1 SHL RCP_PWM_FREQ_1KHZ)+(1 SHL RCP_PWM_FREQ_2KHZ)+(1 SHL RCP_PWM_FREQ_4KHZ)+(1 SHL RCP_PWM_FREQ_8KHZ)+(1 SHL RCP_PWM_FREQ_12KHZ))
+174D    552E          6040     	ANL	A, FLAGS3					; Check pwm frequency flags
+174F    7004          6041     	JNZ	RUN6_CHECK_SPEED			; If a flag is set (PWM) - branch
+                      6042     
+1751    E528          6043     	MOV	A, RCP_TIMEOUT_CNT			; Load RC pulse timeout counter value
+1753    6009          6044     	JZ	RUN_TO_WAIT_FOR_POWER_ON		; If it is zero - go back to wait for poweron
+                      6045     
+                      6046     RUN6_CHECK_SPEED: 
+1755    C3            6047     	CLR	C
+1756    E53D          6048     	MOV	A, COMM_PERIOD4X_H			; Is Comm_Period4x more than 32ms (~1220 eRPM)?
+1758    94F0          6049     	SUBB	A, #0F0H
+175A    5002          6050     	JNC	RUN_TO_WAIT_FOR_POWER_ON		; Yes - go back to motor start
+175C    C12D          6051     	JMP	RUN1						; Go back to run 1
+                      6052     
+                      6053     
+                      6054     RUN_TO_WAIT_FOR_POWER_ON: 	
+175E    C2AF          6055     	CLR	EA
+1760    1197          6056     	CALL SWITCH_POWER_OFF
+1762    7887          6057     MOV R0 , # PGM_PWM_FREQ 
+1764    E6            6058     MOV A , @ R0 
+1765    FE            6059     MOV R6 , A 
+1766    7602          6060     MOV @ R0 , # 2 
+1768    316E          6061     	CALL	DECODE_PARAMETERS			; (Decode_parameters uses Temp1 and Temp8)
+176A    7887          6062     MOV R0 , # PGM_PWM_FREQ 
+176C    EE            6063     MOV A , R6 
+176D    F6            6064     MOV @ R0 , A 
+176E    E4            6065     	CLR	A
+176F    F522          6066     	MOV	REQUESTED_PWM, A			; Set requested pwm to zero
+1771    F523          6067     	MOV	GOVERNOR_REQ_PWM, A			; Set governor requested pwm to zero
+1773    F524          6068     	MOV	CURRENT_PWM, A				; Set current pwm to zero
+1775    F525          6069     	MOV	CURRENT_PWM_LIMITED, A		; Set limited current pwm to zero
+1777    F561          6070     	MOV	PWM_MOTOR_IDLE, A			; Set motor idle to zero
+1779    C260          6071     CLR FLAGS1 . 0 
+177B    D2AF          6072     	SETB	EA
+177D    1207EB        6073     	CALL	WAIT1MS					; Wait for pwm to be stopped
+1780    1197          6074     	CALL SWITCH_POWER_OFF
+                      6075     IF MODE == 0	; Main
                                	MOV	A, #((1 SHL RCP_PWM_FREQ_1KHZ)+(1 SHL RCP_PWM_FREQ_2KHZ)+(1 SHL RCP_PWM_FREQ_4KHZ)+(1 SHL RCP_PWM_FREQ_8KHZ)+(1 SHL RCP_PWM_FREQ_12KHZ))
                                	ANL	A, FLAGS3					; Check pwm frequency flags
                                	JNZ	RUN_TO_NEXT_STATE_MAIN		; If a flag is set (PWM) - branch
@@ -6105,23 +5970,23 @@ LOC     OBJ           LINE    SOURCE
                                JMP_WAIT_FOR_POWER_ON:
                                	JMP	WAIT_FOR_POWER_ON			; Go back to wait for power on
                                ENDIF
-                      6241     IF MODE >= 1	; Tail or multi
-1849    741F          6242     	MOV	A, #((1 SHL RCP_PWM_FREQ_1KHZ)+(1 SHL RCP_PWM_FREQ_2KHZ)+(1 SHL RCP_PWM_FREQ_4KHZ)+(1 SHL RCP_PWM_FREQ_8KHZ)+(1 SHL RCP_PWM_FREQ_12KHZ))
-184B    552E          6243     	ANL	A, FLAGS3					; Check pwm frequency flags
-184D    7007          6244     	JNZ	JMP_WAIT_FOR_POWER_ON		; If a flag is set (PWM) - branch
-                      6245     
-184F    E528          6246     	MOV	A, RCP_TIMEOUT_CNT			; Load RC pulse timeout counter value
-1851    7003          6247     	JNZ	JMP_WAIT_FOR_POWER_ON		; If it is not zero - go back to wait for poweron
-                      6248     
-1853    021353        6249     	JMP	MEASURE_PWM_FREQ_INIT		; If it is zero (pulses missing) - go back to measure pwm frequency
-                      6250     
-                      6251     JMP_WAIT_FOR_POWER_ON: 
-1856    0214C3        6252     	JMP	WAIT_FOR_POWER_ON			; Go back to wait for power on
-                      6253     ENDIF
-                      6254     
-                      6255     
-                      6256     END
-MACRO ASSEMBLER BLHELI                                      05/25/15 20:01:22 PAGE     0
+                      6106     IF MODE >= 1	; Tail or multi
+1782    741F          6107     	MOV	A, #((1 SHL RCP_PWM_FREQ_1KHZ)+(1 SHL RCP_PWM_FREQ_2KHZ)+(1 SHL RCP_PWM_FREQ_4KHZ)+(1 SHL RCP_PWM_FREQ_8KHZ)+(1 SHL RCP_PWM_FREQ_12KHZ))
+1784    552E          6108     	ANL	A, FLAGS3					; Check pwm frequency flags
+1786    7006          6109     	JNZ	JMP_WAIT_FOR_POWER_ON		; If a flag is set (PWM) - branch
+                      6110     
+1788    E528          6111     	MOV	A, RCP_TIMEOUT_CNT			; Load RC pulse timeout counter value
+178A    7002          6112     	JNZ	JMP_WAIT_FOR_POWER_ON		; If it is not zero - go back to wait for poweron
+                      6113     
+178C    6159          6114     	JMP	MEASURE_PWM_FREQ_INIT		; If it is zero (pulses missing) - go back to measure pwm frequency
+                      6115     
+                      6116     JMP_WAIT_FOR_POWER_ON: 
+178E    8100          6117     	JMP	WAIT_FOR_POWER_ON			; Go back to wait for power on
+                      6118     ENDIF
+                      6119     
+                      6120     
+                      6121     END
+MACRO ASSEMBLER BLHELI                                      05/25/15 20:41:58 PAGE     0
 
 
 SYMBOL TABLE LISTING
@@ -6130,7 +5995,7 @@ SYMBOL TABLE LISTING
 
 N A M E             T Y P E  V A L U E   ATTRIBUTES
 
-NORMAL_RUN_CHECK_~  C ADDR   17F8H   A 
+NORMAL_RUN_CHECK_~  C ADDR   1735H   A 
 COMP_WAIT_ON_COMP~  C ADDR   0E4CH   A 
 CALC_NEXT_COMM_SL~  C ADDR   0D1FH   A 
 CHECK_TEMP_VOLTAG~  C ADDR   0B72H   A 
@@ -6154,8 +6019,7 @@ P0 . . . . . . . .  D ADDR   0080H   A
 DPL. . . . . . . .  D ADDR   0082H   A 
 ADC0LTH. . . . . .  D ADDR   00C6H   A 
 ADC0H. . . . . . .  D ADDR   00BEH   A 
-INIT_START . . . .  C ADDR   1530H   A 
-PROGRAM_BY_TX_ENT~  C ADDR   13F2H   A 
+INIT_START . . . .  C ADDR   146DH   A 
 FIND_THROTTLE_GAI~  C ADDR   1255H   A 
 COMM45_NFET. . . .  C ADDR   0FD5H   A 
 COMM45_NONDAMP . .  C ADDR   0FD2H   A 
@@ -6202,10 +6066,7 @@ P2 . . . . . . . .  D ADDR   00A0H   A
 P0MAT. . . . . . .  D ADDR   00FDH   A 
 OSCLCN . . . . . .  D ADDR   00E3H   A 
 B. . . . . . . . .  D ADDR   00F0H   A 
-WAIT_FOR_POWER_ON.  C ADDR   14C3H   A 
-THROTTLE_LOW_CAL_~  C ADDR   144AH   A 
-ARMING_INITIAL_AR~  C ADDR   13D8H   A 
-PROGRAM_BY_TX_CHE~  C ADDR   148BH   A 
+WAIT_FOR_POWER_ON.  C ADDR   1400H   A 
 SET_DEFAULT_PARAM~  C ADDR   1114H   A 
 COMM56_NONDAMP . .  C ADDR   1018H   A 
 COMM23_CP. . . . .  C ADDR   0F63H   A 
@@ -6233,8 +6094,7 @@ SMB0CN . . . . . .  D ADDR   00C0H   A
 SCON0. . . . . . .  D ADDR   0098H   A 
 P1MAT. . . . . . .  D ADDR   00EDH   A 
 SKYWALKER_20A_MAIN  N NUMB   005Bh            
-STEPPER_ROT_BEG. .  C ADDR   161DH   A 
-THROTTLE_HIGH_CAL.  C ADDR   141CH   A 
+STEPPER_ROT_BEG. .  C ADDR   155AH   A 
 DECODE_THROTTLE_R~  C ADDR   121BH   A 
 STEPPER_STEP_MED_~  C ADDR   0C9DH   A 
 INITIALIZE_ALL_TI~  C ADDR   0C51H   A 
@@ -6260,7 +6120,7 @@ AMX0N. . . . . . .  D ADDR   00BAH   A
 ADC0LTL. . . . . .  D ADDR   00C5H   A 
 ADC0L. . . . . . .  D ADDR   00BDH   A 
 TURNIGY_PLUSH_12A~  N NUMB   0022h            
-MEASURE_PWM_FREQ_~  C ADDR   1353H   A 
+MEASURE_PWM_FREQ_~  C ADDR   1359H   A 
 COMM61_CP. . . . .  C ADDR   1074H   A 
 COMM_EXIT. . . . .  C ADDR   1083H   A 
 SETUP_ZC_SCAN_WAIT  C ADDR   0D26H   A 
@@ -6285,7 +6145,7 @@ PCA0CLR. . . . . .  D ADDR   00CEH   A
 EIE2 . . . . . . .  D ADDR   00AFH   A 
 MODE . . . . . . .  N NUMB   0002h            
 SKYWALKER_40A_MAIN  N NUMB   005Eh            
-RUN1 . . . . . . .  C ADDR   16F0H   A 
+RUN1 . . . . . . .  C ADDR   162DH   A 
 CLEAR_RAM. . . . .  C ADDR   12D5H   A 
 SET_BEC_VOLTAGE. .  C ADDR   1245H   A 
 DECODE_GOVERNOR_G~  C ADDR   1202H   A 
@@ -6312,9 +6172,8 @@ PSCTL. . . . . . .  D ADDR   008FH   A
 IDA0H. . . . . . .  D ADDR   0097H   A 
 AMX0P. . . . . . .  D ADDR   00BBH   A 
 PLATINUM_PRO_30A_~  N NUMB   009Eh            
-DIRECT_START_PWM_~  C ADDR   17DBH   A 
-RUN2 . . . . . . .  C ADDR   170EH   A 
-ARMING_PPM_CHECK .  C ADDR   13E2H   A 
+DIRECT_START_PWM_~  C ADDR   1718H   A 
+RUN2 . . . . . . .  C ADDR   164BH   A 
 COMM45_CP. . . . .  C ADDR   0FE8H   A 
 WAIT_BEFORE_ZC_SC~  C ADDR   0DDFH   A 
 MEASURE_LIPO_UPDA~  C ADDR   0B69H   A 
@@ -6341,8 +6200,8 @@ IDA1H. . . . . . .  D ADDR   0097H   A
 DERIVID. . . . . .  D ADDR   00ABH   A 
 ACC. . . . . . . .  D ADDR   00E0H   A 
 PLATINUM_PRO_30A_~  N NUMB   009Fh            
-RUN3 . . . . . . .  C ADDR   172CH   A 
-DIRECT_METHOD_STA~  C ADDR   1587H   A 
+RUN3 . . . . . . .  C ADDR   1669H   A 
+DIRECT_METHOD_STA~  C ADDR   14C4H   A 
 DECODE_DAMPING_DO~  C ADDR   11AAH   A 
 PWM_WAIT . . . . .  C ADDR   0E71H   A 
 CHECK_VOLTAGE_EXIT  C ADDR   0C15H   A 
@@ -6372,9 +6231,9 @@ P0MDIN . . . . . .  D ADDR   00F1H   A
 CPT0MD . . . . . .  D ADDR   009DH   A 
 CPT0CN . . . . . .  D ADDR   009BH   A 
 SKYWALKER_20A_TAIL  N NUMB   005Ch            
-JMP_WAIT_FOR_POWE~  C ADDR   1856H   A 
-DIRECT_START_CHEC~  C ADDR   17DEH   A 
-RUN4 . . . . . . .  C ADDR   174AH   A 
+JMP_WAIT_FOR_POWE~  C ADDR   178EH   A 
+DIRECT_START_CHEC~  C ADDR   171BH   A 
+RUN4 . . . . . . .  C ADDR   1687H   A 
 STORE_TIMES_UP_OR~  C ADDR   0DBFH   A 
 STORE_TIMES_DECRE~  C ADDR   0DD2H   A 
 STEPPER_STEP_SET .  C ADDR   0CB7H   A 
@@ -6399,7 +6258,7 @@ P0MDOUT. . . . . .  D ADDR   00A4H   A
 ADC0CN . . . . . .  D ADDR   00E8H   A 
 SKYWALKER_20A_MUL~  N NUMB   005Dh            
 TURNIGY_PLUSH_12A~  N NUMB   0023h            
-RUN5 . . . . . . .  C ADDR   1768H   A 
+RUN5 . . . . . . .  C ADDR   16A5H   A 
 COMP_READ. . . . .  C ADDR   0E77H   A 
 COMP_WAIT_SET_RES~  C ADDR   0E38H   A 
 DIVIDE_WAIT_TIMES.  C ADDR   0D73H   A 
@@ -6426,9 +6285,9 @@ P1MDOUT. . . . . .  D ADDR   00A5H   A
 IDA0L. . . . . . .  D ADDR   0096H   A 
 SKYWALKER_40A_TAIL  N NUMB   005Fh            
 TURNIGY_PLUSH_12A~  N NUMB   0024h            
-RUN6 . . . . . . .  C ADDR   1786H   A 
-ARMING_START . . .  C ADDR   13C2H   A 
-MEASURE_PWM_FREQ_~  C ADDR   1357H   A 
+RUN6 . . . . . . .  C ADDR   16C3H   A 
+ARMING_START . . .  C ADDR   13C8H   A 
+MEASURE_PWM_FREQ_~  C ADDR   135DH   A 
 DECREMENT_STEP_EX~  C ADDR   1104H   A 
 COMM_RETURN. . . .  C ADDR   1096H   A 
 GOVERNOR_DEACTIVA~  C ADDR   092CH   A 
@@ -6457,7 +6316,7 @@ P2MDOUT. . . . . .  D ADDR   00A6H   A
 IDA1L. . . . . . .  D ADDR   0096H   A 
 SKYWALKER_40A_MUL~  N NUMB   0060h            
 DP_3A_MAIN . . . .  N NUMB   0016h            
-ARM_TARGET_UPDATED  C ADDR   1495H   A 
+ARM_TARGET_UPDATED  C ADDR   13D2H   A 
 EVALUATE_COMPARAT~  C ADDR   0E86H   A 
 TEMP_CHECK_EXIT. .  C ADDR   0BCFH   A 
 GOVERNOR_APPLY_PR~  C ADDR   0A47H   A 
@@ -6485,7 +6344,7 @@ SPI0CFG. . . . . .  D ADDR   00A1H   A
 SMB1DAT. . . . . .  D ADDR   00C2H   A 
 PCA0H. . . . . . .  D ADDR   00FAH   A 
 P0MASK . . . . . .  D ADDR   00FEH   A 
-NORMAL_RUN_CHECKS.  C ADDR   17EBH   A 
+NORMAL_RUN_CHECKS.  C ADDR   1728H   A 
 DEC_STEP_MED_LOW .  C ADDR   10F2H   A 
 WAIT_FOR_COMP_OUT~  C ADDR   0E07H   A 
 WAIT_ADVANCE_TIMI~  C ADDR   0D3AH   A 
@@ -6513,7 +6372,6 @@ TH1. . . . . . . .  D ADDR   008DH   A
 SPI0CN . . . . . .  D ADDR   00F8H   A 
 P1MASK . . . . . .  D ADDR   00EEH   A 
 CRC0CNT. . . . . .  D ADDR   00DEH   A 
-PROGRAM_BY_TX_ENT~  C ADDR   147FH   A 
 WAIT_FOR_COMM_BLI~  C ADDR   0EDFH   A 
 SKYPUP_03. . . . .  C ADDR   078EH   A 
 T0_INT_PWM_OFF_ST~  C ADDR   00DCH   A 
@@ -6569,8 +6427,8 @@ REVISION . . . . .  D ADDR   00ACH   A
 PCA0CPH0 . . . . .  D ADDR   00FCH   A 
 IDA0CN . . . . . .  D ADDR   00B9H   A 
 EIP1 . . . . . . .  D ADDR   00F6H   A 
-STEPPER_ROT_EXIT .  C ADDR   168EH   A 
-STEPPER_METHOD_ST~  C ADDR   15C8H   A 
+STEPPER_ROT_EXIT .  C ADDR   15CBH   A 
+STEPPER_METHOD_ST~  C ADDR   1505H   A 
 DECODE_PARAMS_DIR~  C ADDR   11E4H   A 
 COMM12_DAMP. . . .  C ADDR   0F03H   A 
 SETUP_COMM_WAIT. .  C ADDR   0EB1H   A 
@@ -6599,8 +6457,7 @@ PCA0CPH1 . . . . .  D ADDR   00EAH   A
 IDA1CN . . . . . .  D ADDR   00B9H   A 
 EIP2 . . . . . . .  D ADDR   00BFH   A 
 DP_3A_TAIL . . . .  N NUMB   0017h            
-ARM_END_BEEP . . .  C ADDR   14A1H   A 
-THROTTLE_HIGH_CAL~  C ADDR   141AH   A 
+ARM_END_BEEP . . .  C ADDR   13DEH   A 
 WAIT_FOR_COMP_OUT~  C ADDR   0DF8H   A 
 LOAD_MIN_TIME. . .  C ADDR   0D8FH   A 
 CALC_NEW_WAIT_TIM~  C ADDR   0D4EH   A 
@@ -6631,7 +6488,7 @@ TL1. . . . . . . .  D ADDR   008BH   A
 SN0. . . . . . . .  D ADDR   00ABH   A 
 PCA0CPH2 . . . . .  D ADDR   00ECH   A 
 DP_3A_MULTI. . . .  N NUMB   0018h            
-RUN6_CHECK_RCP_TI~  C ADDR   180EH   A 
+RUN6_CHECK_RCP_TI~  C ADDR   174BH   A 
 DECREMENT_STEP . .  C ADDR   10B5H   A 
 COMM23_DAMP. . . .  C ADDR   0F33H   A 
 WAIT_DEMAG_DEFAUL~  C ADDR   0EE1H   A 
@@ -6667,7 +6524,7 @@ T2SPLIT. . . . . .  B ADDR   00C8H.3 A
 TMR5RLL. . . . . .  D ADDR   00CAH   A 
 TMR3L. . . . . . .  D ADDR   0094H   A 
 SN1. . . . . . . .  D ADDR   00ACH   A 
-INITIAL_RUN_PHASE~  C ADDR   1807H   A 
+INITIAL_RUN_PHASE~  C ADDR   1744H   A 
 TEST_THROTTLE_GAIN  C ADDR   1263H   A 
 STEPPER_STEP_MED .  C ADDR   0C8FH   A 
 GOVERNOR_STORE_PR~  C ADDR   0A6EH   A 
@@ -6725,9 +6582,8 @@ SN3. . . . . . . .  D ADDR   00AEH   A
 PCA0CPM0 . . . . .  D ADDR   00DAH   A 
 PCA0CPL1 . . . . .  D ADDR   00E9H   A 
 FLSCL. . . . . . .  D ADDR   00B6H   A 
-DAMPED_TRANSITION.  C ADDR   16E6H   A 
-BEEP_DELAY_SET . .  C ADDR   14EBH   A 
-PROGRAM_BY_TX_ENT~  C ADDR   1403H   A 
+DAMPED_TRANSITION.  C ADDR   1623H   A 
+BEEP_DELAY_SET . .  C ADDR   1428H   A 
 LOCK_BYTE_OK . . .  C ADDR   1291H   A 
 DECODE_PWM_FREQ_L~  C ADDR   11FCH   A 
 DECODE_DAMPING_3 .  C ADDR   1182H   A 
@@ -6759,8 +6615,7 @@ PCA0MD . . . . . .  D ADDR   00D9H   A
 PCA0CPM1 . . . . .  D ADDR   00DBH   A 
 PCA0CPL2 . . . . .  D ADDR   00EBH   A 
 PCA0CN . . . . . .  D ADDR   00D8H   A 
-DIRECT_START_PARA~  C ADDR   17C3H   A 
-THROTTLE_LOW_CAL .  C ADDR   144CH   A 
+DIRECT_START_PARA~  C ADDR   1700H   A 
 DECODE_DAMPING_4 .  C ADDR   118CH   A 
 COMM45_DAMP. . . .  C ADDR   0FB8H   A 
 WAIT_FOR_COMM_SET~  C ADDR   0EF1H   A 
@@ -6820,8 +6675,8 @@ TR1. . . . . . . .  B ADDR   0088H.6 A
 TMR3CN . . . . . .  D ADDR   0091H   A 
 P0SKIP . . . . . .  D ADDR   00D4H   A 
 EIP1H. . . . . . .  D ADDR   0085H   A 
-RUN6_CHECK_SPEED .  C ADDR   1818H   A 
-WAIT_FOR_POWER_ON~  C ADDR   1517H   A 
+RUN6_CHECK_SPEED .  C ADDR   1755H   A 
+WAIT_FOR_POWER_ON~  C ADDR   1454H   A 
 DECODE_DAMPING_6 .  C ADDR   11A0H   A 
 DEC_STEP_LOW . . .  C ADDR   10FBH   A 
 COMM56_DAMP. . . .  C ADDR   1003H   A 
@@ -6847,7 +6702,7 @@ PCA0PWM. . . . . .  D ADDR   00F7H   A
 P1SKIP . . . . . .  D ADDR   00D5H   A 
 EIP2H. . . . . . .  D ADDR   0086H   A 
 TURNIGY_KFORCE_40~  N NUMB   004Dh            
-RUN_TO_WAIT_FOR_P~  C ADDR   1822H   A 
+RUN_TO_WAIT_FOR_P~  C ADDR   175EH   A 
 EVAL_COMP_CHECK_T~  C ADDR   0EA6H   A 
 ADJUST_TIMING_TWO~  C ADDR   0DB5H   A 
 CHECK_VOLTAGE_RET.  C ADDR   0C20H   A 
@@ -6870,8 +6725,8 @@ P2SKIP . . . . . .  D ADDR   00D6H   A
 IP . . . . . . . .  D ADDR   00B8H   A 
 CRC0CN . . . . . .  D ADDR   00DFH   A 
 TURNIGY_KFORCE_40~  N NUMB   004Eh            
-READ_INITIAL_TEMP.  C ADDR   1566H   A 
-WAIT_FOR_POWER_ON~  C ADDR   1508H   A 
+READ_INITIAL_TEMP.  C ADDR   14A3H   A 
+WAIT_FOR_POWER_ON~  C ADDR   1445H   A 
 DECODE_PWM_FREQ_E~  C ADDR   1201H   A 
 WAIT_FOR_COMM_WAIT  C ADDR   0EF3H   A 
 PWM_WAIT_STARTUP .  C ADDR   0E6CH   A 
@@ -6891,7 +6746,7 @@ DEFAULT_PGM_TAIL_~  N NUMB   0005h
 COMP_COMM. . . . .  N NUMB   0001h            
 PFETON_DELAY . . .  N NUMB   0006h            
 PSW. . . . . . . .  D ADDR   00D0H   A 
-VALIDATE_RCP_START  C ADDR   138DH   A 
+VALIDATE_RCP_START  C ADDR   1393H   A 
 LOCK_BYTE_TEST . .  C ADDR   128AH   A 
 DEC_STEP_MED_HIGH.  C ADDR   10E0H   A 
 COMM_RESTORE_POWER  C ADDR   1094H   A 
@@ -6924,7 +6779,7 @@ TF5L . . . . . . .  B ADDR   00C8H.6 A
 SMB0CF . . . . . .  D ADDR   00C1H   A 
 FLKEY. . . . . . .  D ADDR   00B7H   A 
 ADC0GTH. . . . . .  D ADDR   00C4H   A 
-WAIT_FOR_POWER_ON~  C ADDR   14C8H   A 
+WAIT_FOR_POWER_ON~  C ADDR   1405H   A 
 DEC_STEP_MED . . .  C ADDR   10E9H   A 
 READ_TIMER . . . .  C ADDR   0CCFH   A 
 CHECK_VOLTAGE_STA~  C ADDR   0BD3H   A 
@@ -7012,7 +6867,7 @@ TB80 . . . . . . .  B ADDR   0098H.3 A
 IE0. . . . . . . .  B ADDR   0088H.1 A 
 REF0CN . . . . . .  D ADDR   00D1H   A 
 CLKSEL . . . . . .  D ADDR   00A9H   A 
-MEASURE_PWM_FREQ_~  C ADDR   1355H   A 
+MEASURE_PWM_FREQ_~  C ADDR   135BH   A 
 COMM61_NFET. . . .  C ADDR   1059H   A 
 COMM61_NONDAMP . .  C ADDR   1056H   A 
 COMM6COMM1 . . . .  C ADDR   102CH   A 
@@ -7048,7 +6903,7 @@ ADC0GTL. . . . . .  D ADDR   00C3H   A
 
 
 MODULE INFORMATION:   STATIC OVERLAYABLE
-   CODE SIZE        =   6203    ----
+   CODE SIZE        =   6002    ----
    XDATA SIZE       =   ----    ----
    DATA SIZE        =     86    ----
    IDATA SIZE       =     84    ----
