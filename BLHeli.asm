@@ -46,7 +46,19 @@ $NOMOD51
 ; Direct startup is the only phase, before normal bemf commutation run begins.
 ;
 ;**** **** **** **** ****
+Skywalker_20A_Multi 			EQU 93 
+Skywalker_40A_Multi 			EQU 96  
 Platinum_Pro_30A_Multi 			EQU 159  
+
+IF BESC == Skywalker_20A_Multi
+MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
+$include (Skywalker_20A.inc)		; Select Skywalker 20A pinout
+ENDIF
+
+IF BESC == Skywalker_40A_Multi
+MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
+$include (Skywalker_40A.inc)		; Select Skywalker 40A pinout
+ENDIF
 
 IF BESC == Platinum_Pro_30A_Multi
 MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
