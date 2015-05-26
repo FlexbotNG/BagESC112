@@ -507,7 +507,6 @@ cState:					DS	1		; 状态
 STATE_WAIT		EQU	0x00
 STATE_FULL		EQU	0x10
 STATE_CRUISE		EQU	0x20
-STATE_INIT		EQU	0xFF
 ;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 
 ; Indirect addressing data segment. The variables below must be in this sequence
@@ -1960,13 +1959,6 @@ pca_int_limited:
 ; 	大于 THR_SWITCH nPWMIn = PWM_IN_HIGH
 ; 
 	clr	C
-	mov	A, Initial_Arm
-	jz	state_is_armed
-	mov	New_Rcp, Temp1	
-	ljmp endif_state
-
-state_is_armed:
-	clr	C
 	mov	A, Temp1
 	subb	A, #THR_SWITCH				; Temp1 - THR_SWITCH < 0 ?
 	jnc 	set_pwm_in_high			; No nPWMIn = PWM_IN_HIGH
@@ -1977,97 +1969,73 @@ set_pwm_in_high:
 set_pwm_in:
 	mov	nPWMIn, Temp1
 
-; 	; 判断是否 PWM_IN_HIGH
-; 	mov	Temp1, nPWMIn
-; 	cjne	Temp1, #PWM_IN_HIGH, lsss
-; 	mov	Temp1, #PWM_CRUISE
-;	mov	New_Rcp, Temp1	
-; 	jmp	endif_state
-; lsss:
-; 	; 最低油门
-; 	mov	Temp1, #RCP_MIN
-; 	mov	New_Rcp, Temp1	
-; 	jmp	endif_state
 
-; 状态 cState
-	mov	Temp1, cState				; 状态
-	cjne	Temp1, #STATE_INIT, eles_state_init
-if_state_init:
-; STATE_INIT 状态
-; 初始油门
+
+
+	; 
+	; 判断是否 PWM_IN_HIGH
+	mov	Temp1, nPWMIn
+	cjne	Temp1, #PWM_IN_HIGH, lsss
 	mov	Temp1, #PWM_CRUISE
 	mov	New_Rcp, Temp1	
-	mov	A, HOLD_FULL_L
-	inc	A
-	clr 	C
-	mov	HOLD_FULL_L, A
-	subb A, #50
-	jc	endif_state
-	clr	A
-	mov	HOLD_FULL_L, A
-	mov	HOLD_FULL_H, A
-	mov	Temp1, #STATE_WAIT		; 状态切换为 STATE_WAIT
-	mov	cState, Temp1
-	ljmp endif_state
-
-eles_state_init:
-	mov	Temp1, #(RCP_MIN + 1)
+	jmp	endif_state
+lsss:
+	; 最低油门
+	mov	Temp1, #RCP_MIN
 	mov	New_Rcp, Temp1	
-	ljmp endif_state
+
+	jmp	endif_state
+
+
+
+
 
 ;
 ; 判断 cState 状态
 ;
-;	mov	Temp1, cState				; 状态
-;	cjne	Temp1, #STATE_FULL, eles_state_full
-;if_state_full:
-; STATE_FULL 状态
-; 以下是 StateFull(); 的代码
-;
-; 全油门
-;	mov	Temp1, #PWM_FULL
-;	mov	Temp1, #RCP_MIN
-;	mov	New_Rcp, Temp1	
-	; 
-;	ljmp endif_state
-
-;eles_state_full:
-;	mov	Temp1, #PWM_FULL
-;	mov	Temp1, #RCP_MIN
-;	mov	New_Rcp, Temp1	
-	; 
-;	ljmp endif_state
-
-
-;	mov	Temp1, cState
-;	cjne	Temp1, #STATE_CRUISE, else_state_cruise
-;
-;if_state_cruise:
-	; STATE_FULL 状态
-	; 以下是 StateCruise(); 的代码
-	;
-	; 巡航油门
-;	mov	Temp1, #PWM_CRUISE
-;	mov	Temp1, #RCP_MIN
-;	mov	New_Rcp, Temp1	
-	; 
-;	jmp endif_state
-
-;else_state_cruise:
-	; STATE_FULL 状态
-	; 以下是 StateWait(); 的代码
-	;
-	; 最低油门
-;	mov	Temp1, #RCP_MIN
-;	mov	New_Rcp, Temp1	
-	; 
-	; 判断是否 PWM_IN_HIGH
-;	mov	Temp1, nPWMIn
-;	cjne	Temp1, #PWM_IN_HIGH, endif_state
-;	mov	Temp1, #STATE_FULL		; 状态切换为 STATE_FULL
-;	mov	cState, Temp1
-;	jmp	endif_state
-
+; 	mov	Temp1, cState				; 状态
+; 	cjne	Temp1, #STATE_FULL, eles_state_full
+; if_state_full:
+; 	; STATE_FULL 状态
+; 	; 以下是 StateFull(); 的代码
+; 	;
+; 	; 全油门
+; 	mov	Temp1, #PWM_FULL
+; 	mov	Temp1, #RCP_MIN
+; 	mov	New_Rcp, Temp1	
+; 	; 
+; 	jmp endif_state
+; 
+; eles_state_full:
+; 	mov	Temp1, cState
+; 	cjne	Temp1, #STATE_CRUISE, else_state_cruise
+; 
+; if_state_cruise:
+; 	; STATE_FULL 状态
+; 	; 以下是 StateCruise(); 的代码
+; 	;
+; 	; 巡航油门
+; 	mov	Temp1, #PWM_CRUISE
+; 	mov	Temp1, #RCP_MIN
+; 	mov	New_Rcp, Temp1	
+; 	; 
+; 	jmp endif_state
+; 
+; else_state_cruise:
+; 	; STATE_FULL 状态
+; 	; 以下是 StateWait(); 的代码
+; 	;
+; 	; 最低油门
+; 	mov	Temp1, #RCP_MIN
+; 	mov	New_Rcp, Temp1	
+; 	; 
+; 	; 判断是否 PWM_IN_HIGH
+; 	mov	Temp1, nPWMIn
+; 	cjne	Temp1, #PWM_IN_HIGH, endif_state
+; 	mov	Temp1, #STATE_FULL		; 状态切换为 STATE_FULL
+; 	mov	cState, Temp1
+; 	jmp	endif_state
+; 
 endif_state:
 
 ; skypup_03:
@@ -4504,12 +4472,10 @@ ENDIF
 ;
 ; 初始化变量 
 ; Skypup 2015.05.25
-	clr	A
-	mov	Prev_Rcp,	A
-	mov	nHold_L,	A
-	mov	nHold_H,	A
-	mov	Temp1, #STATE_INIT
-	mov	cState, Temp1
+	mov	Prev_Rcp,	#0
+	mov	nHold_L,	#0
+	mov	nHold_H,	#0
+	mov	cState,	#STATE_WAIT
 ;**** **** **** **** **** **** **** **** **** **** **** **** ****
 	ret
 
@@ -4941,10 +4907,10 @@ clear_ram:
 	call wait30ms
 
 	; Wait for receiver to initialize
-	; call	wait1s
-	; call	wait200ms
-	; call	wait200ms
-	; call	wait100ms
+	call	wait1s
+	call	wait200ms
+	call	wait200ms
+	call	wait100ms
 
 	; Enable interrupts
 	mov	IE, #22h			; Enable timer0 and timer2 interrupts
