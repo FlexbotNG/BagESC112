@@ -226,8 +226,8 @@ ENDIF
 DEFAULT_PGM_MULTI_DEMAG_COMP 		EQU 2 	; 1=Disabled	2=Low		3=High
 DEFAULT_PGM_MULTI_DIRECTION		EQU 1 	; 1=Normal 	2=Reversed	3=Bidirectional
 DEFAULT_PGM_MULTI_RCP_PWM_POL 	EQU 1 	; 1=Positive 	2=Negative
-DEFAULT_PGM_MULTI_BEEP_STRENGTH	EQU 80	; Beep strength
-DEFAULT_PGM_MULTI_BEACON_STRENGTH	EQU 80	; Beacon strength
+DEFAULT_PGM_MULTI_BEEP_STRENGTH	EQU 20	; Beep strength
+DEFAULT_PGM_MULTI_BEACON_STRENGTH	EQU 20	; Beacon strength
 DEFAULT_PGM_MULTI_BEACON_DELAY	EQU 5 	; 1=1m		2=2m			3=5m			4=10m		5=Infinite
 ; Common
 DEFAULT_PGM_ENABLE_TX_PROGRAM 	EQU 0 	; 1 = Enabled 	0 = Disabled
@@ -486,6 +486,7 @@ HOLD_CRUISE_H		EQU	75h	; 30000 0x7530 高位
 ;
 ;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 ;
+Flag_Before_ARM:			DS	1		; 标记在解锁前需要 New_Rcp 为一个较大的值
 Prev_Rcp:					DS	1		; 上一次输出的 New_Rcp 值
 ;
 nPWMIn:					DS	1		; 读取的 PWM 信号，高或低。
@@ -1959,6 +1960,7 @@ pca_int_limited:
 ; 	小于 THR_SWITCH nPWMIn = PWM_IN_LOW
 ; 	大于 THR_SWITCH nPWMIn = PWM_IN_HIGH
 ; 
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 Procedure_GetPWM:
 	clr	C
 	mov	A, Temp1
@@ -1973,91 +1975,101 @@ set_pwm_in:
 End_Procedure_GetPWM:
 
 
-
-	; 例程: 判断是否 PWM_IN_HIGH
-	mov	Temp1, nPWMIn
-	cjne	Temp1, #PWM_IN_HIGH, lsss
-	mov	Temp1, #PWM_FULL
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
+;
+; 是否解锁
+; Skypup 2015.05.26
+;
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
+	mov	Temp1, Flag_Before_ARM
+	cjne	Temp1, #1, else_Flag_Before_Arm
+if_Flag_Before_ARM:
+	mov Temp1, #PWM_FULL
 	mov	New_Rcp, Temp1	
-	jmp	endif_state
-lsss:
-	; 最低油门
-	mov	Temp1, #RCP_MIN
-	mov	New_Rcp, Temp1	
-	jmp	endif_state
+	jmp set_Prev_Rcp				; 如果未解锁, 不做后续处理, 直接跳转
+else_Flag_Before_ARM:
+; endif_Flag_Before_ARM:
 
 
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
+;
+; 例程: 判断是否 PWM_IN_HIGH
+;
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
+;	mov	Temp1, nPWMIn
+;	cjne	Temp1, #PWM_IN_HIGH, else_nPWMIn_pwm_in_high
+;if_nPWMIn_pwm_in_high:
+;	mov	Temp1, Initial_Arm
+;	cjne	Temp1, #1, else_Initial_Arm
+;  if_Initial_Arm:
+;	mov Temp1, #PWM_FULL
+;	mov	New_Rcp, Temp1	
+;	jmp set_Prev_Rcp		; 如果未解锁, 不做后续处理, 直接跳转
+;  else_Initial_Arm:
+;	mov	Temp1,  #RCP_MIN
+;  endif_INitial_Arm:
+;	mov	New_Rcp, Temp1	
+;	jmp	endif_nPWMIn_pwm_in_high
+;else_nPWMIn_pwm_in_high:
+;	; 最低油门
+;	mov	Temp1, #RCP_MIN
+;	mov	New_Rcp, Temp1	
+;	; jmp	endif_nPWMIn_pwm_in_high
+;endif_nPWMIn_pwm_in_high:
 
 
-
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 ;
 ; 判断 cState 状态
 ;
-; 	mov	Temp1, cState				; 状态
-; 	cjne	Temp1, #STATE_FULL, eles_state_full
-; if_state_full:
-; 	; STATE_FULL 状态
-; 	; 以下是 StateFull(); 的代码
-; 	;
-; 	; 全油门
-; 	mov	Temp1, #PWM_FULL
-; 	mov	Temp1, #RCP_MIN
-; 	mov	New_Rcp, Temp1	
-; 	; 
-; 	jmp endif_state
-; 
-; eles_state_full:
-; 	mov	Temp1, cState
-; 	cjne	Temp1, #STATE_CRUISE, else_state_cruise
-; 
-; if_state_cruise:
-; 	; STATE_FULL 状态
-; 	; 以下是 StateCruise(); 的代码
-; 	;
-; 	; 巡航油门
-; 	mov	Temp1, #PWM_CRUISE
-; 	mov	Temp1, #RCP_MIN
-; 	mov	New_Rcp, Temp1	
-; 	; 
-; 	jmp endif_state
-; 
-; else_state_cruise:
-; 	; STATE_FULL 状态
-; 	; 以下是 StateWait(); 的代码
-; 	;
-; 	; 最低油门
-; 	mov	Temp1, #RCP_MIN
-; 	mov	New_Rcp, Temp1	
-; 	; 
-; 	; 判断是否 PWM_IN_HIGH
-; 	mov	Temp1, nPWMIn
-; 	cjne	Temp1, #PWM_IN_HIGH, endif_state
-; 	mov	Temp1, #STATE_FULL		; 状态切换为 STATE_FULL
-; 	mov	cState, Temp1
-; 	jmp	endif_state
-; 
-endif_state:
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
+;
+ 	mov	Temp1, cState				; cState 状态
+ 	cjne	Temp1, #STATE_FULL, eles_state_full
+ if_state_full:
+ 	; STATE_FULL
+ 	;
+ 	; 全油门
+ 	mov	Temp1, #PWM_FULL
+ 	mov	New_Rcp, Temp1	
+ 	; 
+ 	jmp endif_state_full
+ 
+ eles_state_full:
+ 	mov	Temp1, cState
+ 	cjne	Temp1, #STATE_CRUISE, else_state_cruise
+ 
+	if_state_cruise:
+	 	; STATE_FULL
+	 	;
+	 	; 巡航油门
+	 	mov	Temp1, #PWM_CRUISE
+	 	mov	New_Rcp, Temp1	
+	 	; 
+	 	jmp endif_state_cruise
+ 
+	else_state_cruise:
+	 	; STATE_WAIT
+	 	mov	Temp1, #RCP_MIN			; 最低油门
+	 	mov	New_Rcp, Temp1	
+		;
+		mov	Temp1, Initial_Arm
+		cjne	Temp1, #0, else_Initial_Arm
+		if_Initial_Arm:
+			; 判断是否 PWM_IN_HIGH
+		 	mov	Temp1, nPWMIn
+		 	cjne	Temp1, #PWM_IN_HIGH, endif_State_Wait_pwm_in_high
+		 	mov	Temp1, #STATE_FULL		; 状态切换为 STATE_FULL
+		 	mov	cState, Temp1
+		 	jmp	endif_Initial_Arm
+			endif_State_Wait_pwm_in_high:
+		else_Initial_Arm:
+		endif_Initial_Arm:
+	endif_state_cruise: 
+endif_state_full:
 
-; skypup_03:
-; 
-; 	clr C
-; 	mov A, Temp1
-; 	subb A, Prev_Rcp				; 上一个 Rcp > 当前 Rcp ?
-; 	jc skypup_04					; No
-; 
-; 	subb A, #THR_DELTA				; 油门缓启动增量 > Rcp 增加值 ?
-; 	jc skypup_04					; No
-; 
-; 	clr C						; 这一句能否去掉? Skypup 2015.05.25
-; 	mov A, Prev_Rcp
-; 	add A, #THR_DELTA
-; 	mov Temp1, A
-; 	jnc skypup_04					; 没有发生进位溢出
-; 
-; 	mov Temp1, #0FFh	
-; 	
-; skypup_04:
 
+set_Prev_Rcp:
 	; 记录 New_Rcp 值
 	mov A, New_Rcp
 	mov Prev_Rcp, A
@@ -4898,19 +4910,20 @@ clear_ram:
 	clr	EA				; Disable interrupts explicitly
 	call wait200ms	
 	call beep_f1
-	call wait30ms
+	call wait10ms
 	call beep_f2
-	call wait30ms
+	call wait10ms
 	call beep_f3
-	call wait30ms
+	call wait10ms
 	call beep_f4
-	call wait30ms
+	call wait10ms
 
 	; Wait for receiver to initialize
 	call	wait1s
 	call	wait200ms
 	call	wait200ms
 	call	wait100ms
+
 
 	; Enable interrupts
 	mov	IE, #22h			; Enable timer0 and timer2 interrupts
@@ -4927,6 +4940,7 @@ ENDIF
 	Initialize_Adc			; Initialize ADC operation
 	call	wait1ms
 	setb	EA				; Enable all interrupts
+
 	; Measure number of lipo cells
 	call Measure_Lipo_Cells			; Measure number of lipo cells
 	; Initialize rc pulse
@@ -4936,6 +4950,7 @@ ENDIF
 	call wait200ms
 	; Set initial arm variable
 	mov	Initial_Arm, #1
+	mov	Flag_Before_ARM, #1
 
 	; Measure PWM frequency
 measure_pwm_freq_init:	
@@ -4989,15 +5004,17 @@ validate_rcp_start:
 	; Beep arm sequence start signal
 	clr 	EA							; Disable all interrupts
 	call beep_f1
-	call wait30ms
+	call wait10ms
 	call beep_f1
-	call wait30ms
+	call wait10ms
 	call beep_f2
-	call wait30ms
+	call wait10ms
 	call beep_f2
-	call wait30ms
+	call wait10ms
 	setb	EA							; Enable all interrupts
 	call wait200ms	
+
+	mov	Flag_Before_ARM, #0		; 为了让定制的程序输出最低油门. Skypup 2015.05.26
 
 	; Arming sequence start
 	mov	Gov_Arm_Target, #0		; Clear governor arm target
@@ -5022,13 +5039,13 @@ arm_end_beep:
 	; Beep arm sequence end signal
 	clr 	EA					; Disable all interrupts
 	call beep_f4
-	call wait30ms
+	call wait10ms
 	call beep_f4
-	call wait30ms
+	call wait10ms
 	call beep_f3
-	call wait30ms
+	call wait10ms
 	call beep_f3
-	call wait30ms
+	call wait10ms
 	setb	EA					; Enable all interrupts
 	call wait200ms
 
