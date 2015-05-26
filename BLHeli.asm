@@ -473,10 +473,10 @@ THR_SWITCH		EQU	0A0h	; 超过多大油门启动
 PWM_FULL			EQU	0FFh	; 大约 2000us 全油门
 PWM_CRUISE		EQU	07Fh	; 大约 1500us 巡航油门
 ;
-HOLD_FULL_L		EQU	0EEh	; 750 0x02EE 低位
-HOLD_FULL_H		EQU	02h	; 750 0x02EE 高位
-HOLD_CRUISE_L		EQU	30h	; 30000 0x7530 低位
-HOLD_CRUISE_H		EQU	75h	; 30000 0x7530 高位
+HOLD_FULL_H		EQU	04h	; 1075 0x0433 高位, Futaba SB6208 15S
+HOLD_FULL_L		EQU	33h	; 1075 0x0433 低位, Futaba SB6208 15S
+HOLD_CRUISE_H		EQU	75h	; 30000 0x7530 高位, Futaba SB6208 7min
+HOLD_CRUISE_L		EQU	30h	; 30000 0x7530 低位, Futaba SB6208 7min
 
 
 ;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
@@ -1539,14 +1539,20 @@ pca_int_fail_minimum:
 	clr	Flags2.RCP_EDGE_NO			; Set first edge flag
 	mov	A, #((1 SHL RCP_PWM_FREQ_1KHZ)+(1 SHL RCP_PWM_FREQ_2KHZ)+(1 SHL RCP_PWM_FREQ_4KHZ)+(1 SHL RCP_PWM_FREQ_8KHZ)+(1 SHL RCP_PWM_FREQ_12KHZ))
 	anl	A, Flags3					; Check pwm frequency flags
-	jnz	($+4)					; If a flag is set (PWM) - proceed
+	; jnz	($+4)					; If a flag is set (PWM) - proceed
+	jnz	line_temp01					; If a flag is set (PWM) - proceed, Skypup 2015.05.26
 
-	ajmp	pca_int_set_timeout			; If PPM - ignore trig as noise
+	; ajmp	pca_int_set_timeout			; If PPM - ignore trig as noise
+	ljmp	pca_int_set_timeout			; If PPM - ignore trig as noise, Skypup 2015.05.26
+line_temp01:
 
 	mov	Temp1, #RCP_MIN			; Set RC pulse value to minimum
 	Read_Rcp_Int 					; Test RC signal level again
-	jnb	ACC.Rcp_In, ($+5)			; Is it high?
-	ajmp	pca_int_set_timeout			; Yes - set new timeout and exit
+	; jnb	ACC.Rcp_In, ($+5)			; Is it high?
+	jnb	ACC.Rcp_In, line_temp02			; Is it high? Skypup 2015.05.26
+	; ajmp	pca_int_set_timeout			; Yes - set new timeout and exit
+	ljmp	pca_int_set_timeout			; Yes - set new timeout and exit, Skypup 2015.05.26
+line_temp02:
 
 ;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 ; 
@@ -1994,6 +2000,7 @@ else_Flag_Before_ARM:
 ;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 ;
 ; 例程: 判断是否 PWM_IN_HIGH
+; Skypup 2015.05.26
 ;
 ;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 ;	mov	Temp1, nPWMIn
@@ -2021,17 +2028,43 @@ else_Flag_Before_ARM:
 ;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 ;
 ; 判断 cState 状态
+; Skypup 2015.05.
 ;
 ;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 ;
- 	mov	Temp1, cState				; cState 状态
+ 	mov	Temp1, cState					; cState 状态
  	cjne	Temp1, #STATE_FULL, eles_state_full
- if_state_full:
+if_state_full:
  	; STATE_FULL
  	;
  	; 全油门
  	mov	Temp1, #PWM_FULL
  	mov	New_Rcp, Temp1	
+	; 计数器 ++
+	inc	nHold_L						; 低位 ++
+	mov	A, nHold_L
+	jnz	if_nHold_H_not_need_inc			; nHold_L 不是 0x00
+	inc	nHold_H
+  if_nHold_H_not_need_inc:
+	; 是否超时
+	clr	C
+	mov	A, nHold_H
+	subb	A, #HOLD_FULL_H
+	jc	if_nHold_Not_Timeout			; 发生借位, 则 nHold_H < #HOLD_FULL_H, 未超时
+	clr	C
+	mov	A, nHold_L
+	subb	A, #HOLD_FULL_L				
+	jc	if_nHold_Not_Timeout			; 发生借位, 则 nHold_L < #HOLD_FULL_L, 未超时
+  if_nHold_Timeout:
+	; 状态切换为 STATE_CRUISE
+	mov	Temp1, #STATE_CRUISE
+	mov	cState, Temp1
+	; 计数器清零
+	clr	A
+	mov	nHold_L, A
+	mov	nHold_H, A
+	jmp	endif_state_full
+  if_nHold_Not_Timeout:
  	; 
  	jmp endif_state_full
  
@@ -2040,7 +2073,7 @@ else_Flag_Before_ARM:
  	cjne	Temp1, #STATE_CRUISE, else_state_cruise
  
 	if_state_cruise:
-	 	; STATE_FULL
+	 	; STATE_CRUISE
 	 	;
 	 	; 巡航油门
 	 	mov	Temp1, #PWM_CRUISE
@@ -2059,8 +2092,13 @@ else_Flag_Before_ARM:
 			; 判断是否 PWM_IN_HIGH
 		 	mov	Temp1, nPWMIn
 		 	cjne	Temp1, #PWM_IN_HIGH, endif_State_Wait_pwm_in_high
-		 	mov	Temp1, #STATE_FULL		; 状态切换为 STATE_FULL
+			; 状态切换为 STATE_FULL
+		 	mov	Temp1, #STATE_FULL
 		 	mov	cState, Temp1
+			; 计数器清零
+			clr	A
+			mov	nHold_L, A
+			mov	nHold_H, A
 		 	jmp	endif_Initial_Arm
 			endif_State_Wait_pwm_in_high:
 		else_Initial_Arm:
@@ -5055,15 +5093,15 @@ arm_end_beep:
 	; Armed and waiting for power on
 wait_for_power_on:
 	clr	A
-	mov	Power_On_Wait_Cnt_L, A	; Clear wait counter
-	mov	Power_On_Wait_Cnt_H, A	
+	mov	Power_On_Wait_Cnt_L, A	; 清零
+	mov	Power_On_Wait_Cnt_H, A	; 清零
 wait_for_power_on_loop:
-	inc	Power_On_Wait_Cnt_L		; Increment low wait counter
+	inc	Power_On_Wait_Cnt_L		; 低位 ++
 	mov	A, Power_On_Wait_Cnt_L
-	cpl	A
-	jnz	wait_for_power_on_no_beep; Counter wrapping (about 1 sec)?
+	cpl	A					; 取反
+	jnz	wait_for_power_on_no_beep; Power_On_Wait_Cnt_L 不是 0xFF 则跳转, 进入下一个循环, Counter wrapping (about 1 sec)?
 
-	inc	Power_On_Wait_Cnt_H		; Increment high wait counter
+	inc	Power_On_Wait_Cnt_H		; Power_On_Wait_Cnt_L == 0xFF, 高位 ++
 	mov	Temp1, #Pgm_Beacon_Delay
 	mov	A, @Temp1
 	mov	Temp1, #25		; Approximately 1 min
