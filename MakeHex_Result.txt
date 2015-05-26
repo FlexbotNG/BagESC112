@@ -14,7 +14,7 @@ ASSEMBLY COMPLETE.   0 WARNING(S)   0 ERROR(S)
 MS-DOS MCS-51 CODE BANKING LINKER/LOCATOR LX51 V06.16.13.326 Hobby version (8 Kb code limited)
 Copyright (c) KEOLABS S.A.S. 1987-2013. All rights reserved. Raisonance is a KEOLABS brand.
 
-<Memory usage: code=6094,  internal data=180.0,  xdata/pdata=0>
+<Memory usage: code=6131,  internal data=180.0,  xdata/pdata=0>
 
 LINK/LOCATE RUN COMPLETE,  NO ERROR FOUND.
 
@@ -34,7 +34,7 @@ ASSEMBLY COMPLETE.   0 WARNING(S)   0 ERROR(S)
 MS-DOS MCS-51 CODE BANKING LINKER/LOCATOR LX51 V06.16.13.326 Hobby version (8 Kb code limited)
 Copyright (c) KEOLABS S.A.S. 1987-2013. All rights reserved. Raisonance is a KEOLABS brand.
 
-<Memory usage: code=6180,  internal data=180.0,  xdata/pdata=0>
+<Memory usage: code=6211,  internal data=180.0,  xdata/pdata=0>
 
 LINK/LOCATE RUN COMPLETE,  NO ERROR FOUND.
 
@@ -54,7 +54,7 @@ ASSEMBLY COMPLETE.   0 WARNING(S)   0 ERROR(S)
 MS-DOS MCS-51 CODE BANKING LINKER/LOCATOR LX51 V06.16.13.326 Hobby version (8 Kb code limited)
 Copyright (c) KEOLABS S.A.S. 1987-2013. All rights reserved. Raisonance is a KEOLABS brand.
 
-<Memory usage: code=6180,  internal data=180.0,  xdata/pdata=0>
+<Memory usage: code=6211,  internal data=180.0,  xdata/pdata=0>
 
 LINK/LOCATE RUN COMPLETE,  NO ERROR FOUND.
 

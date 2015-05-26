@@ -473,10 +473,10 @@ THR_SWITCH		EQU	0A0h	; 超过多大油门启动
 PWM_FULL			EQU	0FFh	; 大约 2000us 全油门
 PWM_CRUISE		EQU	07Fh	; 大约 1500us 巡航油门
 ;
-HOLD_FULL_H		EQU	04h	; 1075 0x0433 高位, Futaba SB6208 15S
-HOLD_FULL_L		EQU	33h	; 1075 0x0433 低位, Futaba SB6208 15S
-HOLD_CRUISE_H		EQU	75h	; 30000 0x7530 高位, Futaba SB6208 7min
-HOLD_CRUISE_L		EQU	30h	; 30000 0x7530 低位, Futaba SB6208 7min
+HOLD_FULL_H		EQU	02h	; 650 0x028A 高位
+HOLD_FULL_L		EQU	8Ah	; 650 0x028A 低位
+HOLD_CRUISE_H		EQU	29h	; 10500 0x2904 高位
+HOLD_CRUISE_L		EQU	04h	; 10500 0x2904 低位
 
 
 ;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
@@ -2035,52 +2035,73 @@ else_Flag_Before_ARM:
  	mov	Temp1, cState					; cState 状态
  	cjne	Temp1, #STATE_FULL, eles_state_full
 if_state_full:
- 	; STATE_FULL
- 	;
- 	; 全油门
+ 	; STATE_FULL - 全油门
  	mov	Temp1, #PWM_FULL
  	mov	New_Rcp, Temp1	
 	; 计数器 ++
-	inc	nHold_L						; 低位 ++
+	inc	nHold_L						; nHold_L 低位 ++
 	mov	A, nHold_L
-	jnz	if_nHold_H_not_need_inc			; nHold_L 不是 0x00
-	inc	nHold_H
-  if_nHold_H_not_need_inc:
+	jnz	if_Full_nHold_L_not_zero			; nHold_L 不是 0x00
+	inc	nHold_H						; nHold_L 是 0x00, nHold_H 高位 ++
+	if_Full_nHold_L_not_zero:
+
 	; 是否超时
 	clr	C
 	mov	A, nHold_H
 	subb	A, #HOLD_FULL_H
-	jc	if_nHold_Not_Timeout			; 发生借位, 则 nHold_H < #HOLD_FULL_H, 未超时
+	jc	if_Full_nHold_Not_Timeout		; 发生借位, 则 nHold_H < #HOLD_FULL_H, 未超时
 	clr	C
 	mov	A, nHold_L
 	subb	A, #HOLD_FULL_L				
-	jc	if_nHold_Not_Timeout			; 发生借位, 则 nHold_L < #HOLD_FULL_L, 未超时
-  if_nHold_Timeout:
-	; 状态切换为 STATE_CRUISE
-	mov	Temp1, #STATE_CRUISE
-	mov	cState, Temp1
-	; 计数器清零
-	clr	A
-	mov	nHold_L, A
-	mov	nHold_H, A
-	jmp	endif_state_full
-  if_nHold_Not_Timeout:
- 	; 
- 	jmp endif_state_full
+	jc	if_Full_nHold_Not_Timeout		; 发生借位, 则 nHold_L < #HOLD_FULL_L, 未超时
+	if_Full_nHold_Timeout:				; 未发生借位, 超时切换至 STATE_CRUISE
+		; 状态切换为 STATE_CRUISE
+		mov	Temp1, #STATE_CRUISE
+		mov	cState, Temp1
+		; 计数器清零
+		clr	A
+		mov	nHold_L, A
+		mov	nHold_H, A
+		jmp	endif_state_full
+	if_Full_nHold_Not_Timeout:
+	 	jmp endif_state_full
  
- eles_state_full:
+eles_state_full:
  	mov	Temp1, cState
  	cjne	Temp1, #STATE_CRUISE, else_state_cruise
  
 	if_state_cruise:
-	 	; STATE_CRUISE
-	 	;
-	 	; 巡航油门
+	 	; STATE_CRUISE - 巡航油门
 	 	mov	Temp1, #PWM_CRUISE
 	 	mov	New_Rcp, Temp1	
-	 	; 
-	 	jmp endif_state_cruise
- 
+		; 计数器 ++
+		inc	nHold_L					; nHold_L 低位 ++
+		mov	A, nHold_L
+		jnz	if_Cruise_nHold_L_not_zero	; nHold_L 不是 0x00
+		inc	nHold_H					; nHold_L 是 0x00, nHold_H 高位 ++
+		if_Cruise_nHold_L_not_zero:
+
+		; 是否超时
+		clr	C
+		mov	A, nHold_H
+		subb	A, #HOLD_CRUISE_H
+		jc	if_Cruise_nHold_Not_Timeout	; 发生借位, 则 nHold_H < #HOLD_CRUISE_H, 未超时
+		clr	C
+		mov	A, nHold_L
+		subb	A, #HOLD_CRUISE_L				
+		jc	if_Cruise_nHold_Not_Timeout	; 发生借位, 则 nHold_L < #HOLD_CRUISE_L, 未超时
+		if_Cruise_nHold_Timeout:			; 未发生借位, 超时切换至 STATE_WAIT
+			; 状态切换为 STATE_WAIT
+			mov	Temp1, #STATE_WAIT
+			mov	cState, Temp1
+			; 计数器清零
+			clr	A
+			mov	nHold_L, A
+			mov	nHold_H, A
+			jmp	endif_state_cruise
+		if_Cruise_nHold_Not_Timeout:
+		 	jmp endif_state_cruise
+  
 	else_state_cruise:
 	 	; STATE_WAIT
 	 	mov	Temp1, #RCP_MIN			; 最低油门
@@ -2105,6 +2126,31 @@ if_state_full:
 		endif_Initial_Arm:
 	endif_state_cruise: 
 endif_state_full:
+
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
+;
+; 已经弃用的代码, 供参考.
+;
+;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
+; skypup_03:
+; 
+; 	clr C
+; 	mov A, Temp1
+; 	subb A, Prev_Rcp				; 上一个 Rcp > 当前 Rcp ?
+; 	jc skypup_04					; No
+; 
+; 	subb A, #THR_DELTA				; 油门缓启动增量 > Rcp 增加值 ?
+; 	jc skypup_04					; No
+; 
+; 	clr C						; 这一句能否去掉? Skypup 2015.05.25
+; 	mov A, Prev_Rcp
+; 	add A, #THR_DELTA
+; 	mov Temp1, A
+; 	jnc skypup_04					; 没有发生进位溢出
+; 
+; 	mov Temp1, #0FFh	
+; 	
+; skypup_04:
 
 
 set_Prev_Rcp:
