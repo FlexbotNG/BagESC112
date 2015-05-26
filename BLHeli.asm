@@ -474,7 +474,7 @@ PWM_FULL			EQU	0FFh	; 大约 2000us 全油门
 PWM_CRUISE		EQU	07Fh	; 大约 1500us 巡航油门
 ;
 HOLD_FULL_L		EQU	0EEh	; 750 0x02EE 低位
-HOLD_FULL_H		EQU	2h	; 750 0x02EE 高位
+HOLD_FULL_H		EQU	02h	; 750 0x02EE 高位
 HOLD_CRUISE_L		EQU	30h	; 30000 0x7530 低位
 HOLD_CRUISE_H		EQU	75h	; 30000 0x7530 高位
 
@@ -504,9 +504,9 @@ cState:					DS	1		; 状态
 ;	00:Wait          -> 10
 ;	10:Full          -> 20
 ;	20:Cruise        -> 00
-STATE_WAIT		EQU	0x00
-STATE_FULL		EQU	0x10
-STATE_CRUISE		EQU	0x20
+STATE_WAIT		EQU	00h
+STATE_FULL		EQU	10h
+STATE_CRUISE		EQU	20h
 ;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 
 ; Indirect addressing data segment. The variables below must be in this sequence
@@ -1953,11 +1953,13 @@ pca_int_limited:
 
 ;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
 ; 
+; GetPWM
 ; Skypup 2015.05.25
 ; 对 RCP 信号处理, 给 nPWMIn 赋值
 ; 	小于 THR_SWITCH nPWMIn = PWM_IN_LOW
 ; 	大于 THR_SWITCH nPWMIn = PWM_IN_HIGH
 ; 
+Procedure_GetPWM:
 	clr	C
 	mov	A, Temp1
 	subb	A, #THR_SWITCH				; Temp1 - THR_SWITCH < 0 ?
@@ -1968,22 +1970,20 @@ set_pwm_in_high:
 	mov	Temp1, #PWM_IN_HIGH
 set_pwm_in:
 	mov	nPWMIn, Temp1
+End_Procedure_GetPWM:
 
 
 
-
-	; 
-	; 判断是否 PWM_IN_HIGH
+	; 例程: 判断是否 PWM_IN_HIGH
 	mov	Temp1, nPWMIn
 	cjne	Temp1, #PWM_IN_HIGH, lsss
-	mov	Temp1, #PWM_CRUISE
+	mov	Temp1, #PWM_FULL
 	mov	New_Rcp, Temp1	
 	jmp	endif_state
 lsss:
 	; 最低油门
 	mov	Temp1, #RCP_MIN
 	mov	New_Rcp, Temp1	
-
 	jmp	endif_state
 
 

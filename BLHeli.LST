@@ -1,9 +1,9 @@
-MACRO ASSEMBLER BLHELI                                      05/25/15 23:44:33 PAGE     1
+MACRO ASSEMBLER BLHELI                                      05/26/15 09:07:55 PAGE     1
 
 
 DOS MACRO ASSEMBLER MA51 V06.16.13.326
 OBJECT MODULE PLACED IN OUTPUT\PLATINUM_PRO_30A_MULTI_REV11_2.OBJ
-ASSEMBLER INVOKED BY: SET(BESC=159) OBJECT(OUTPUT\PLATINUM_PRO_30A_MULTI_REV11_2.OBJ) DEBUG EP QUIET PIN(C:\SILABS\MCU\INC;C:\PROGRA~1\RAISONANCE\RIDE\INC;C:\PROGRA~1\RAISONANCE\RIDE\INC\51) 
+ASSEMBLER INVOKED BY: SET(BESC=159) OBJECT(OUTPUT\PLATINUM_PRO_30A_MULTI_REV11_2.OBJ) DEBUG EP QUIET PIN(C:\SILABS\MCU\INC;C:\RAISONANCE\RIDE\INC;C:\RAISONANCE\RIDE\INC\51) 
 
 LOC     OBJ           LINE    SOURCE
                          1     $NOMOD51
@@ -482,7 +482,7 @@ LOC     OBJ           LINE    SOURCE
   007F                1083     PWM_CRUISE		EQU	07FH	; 大约 1500us 巡航油门
                       1084     ;
   00EE                1085     HOLD_FULL_L		EQU	0EEH	; 750 0x02EE 低位
-  0002                1086     HOLD_FULL_H		EQU	2H	; 750 0x02EE 高位
+  0002                1086     HOLD_FULL_H		EQU	02H	; 750 0x02EE 高位
   0030                1087     HOLD_CRUISE_L		EQU	30H	; 30000 0x7530 低位
   0075                1088     HOLD_CRUISE_H		EQU	75H	; 30000 0x7530 高位
                       1089     
@@ -512,9 +512,9 @@ LOC     OBJ           LINE    SOURCE
                       1113     ;	00:Wait          -> 10
                       1114     ;	10:Full          -> 20
                       1115     ;	20:Cruise        -> 00
-  0000                1116     STATE_WAIT		EQU	0X00
-  0010                1117     STATE_FULL		EQU	0X10
-  0020                1118     STATE_CRUISE		EQU	0X20
+  0000                1116     STATE_WAIT		EQU	00H
+  0010                1117     STATE_FULL		EQU	10H
+  0020                1118     STATE_CRUISE		EQU	20H
                       1119     ;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
                       1120     
                       1121     ; Indirect addressing data segment. The variables below must be in this sequence
@@ -2268,37 +2268,37 @@ LOC     OBJ           LINE    SOURCE
                       2562     
                       2563     ;**** **** **** **** **** **** **** **** **** **** **** **** **** **** **** 
                       2564     ; 
-                      2565     ; Skypup 2015.05.25
-                      2566     ; 对 RCP 信号处理, 给 nPWMIn 赋值
-                      2567     ; 	小于 THR_SWITCH nPWMIn = PWM_IN_LOW
-                      2568     ; 	大于 THR_SWITCH nPWMIn = PWM_IN_HIGH
-                      2569     ; 
-0786    C3            2570     	CLR	C
-0787    E8            2571     MOV A , R0 
-0788    94A0          2572     SUBB A , # 160 
-078A    5005          2573     	JNC 	SET_PWM_IN_HIGH			; No nPWMIn = PWM_IN_HIGH
-078C    7800          2574     MOV R0 , # 0 
-078E    020793        2575     	JMP	SET_PWM_IN
-                      2576     SET_PWM_IN_HIGH: 
-0791    7801          2577     MOV R0 , # 1 
-                      2578     SET_PWM_IN: 
-0793    8874          2579     MOV NPWMIN , R0 
-                      2580     
-                      2581     
-                      2582     
+                      2565     ; GetPWM
+                      2566     ; Skypup 2015.05.25
+                      2567     ; 对 RCP 信号处理, 给 nPWMIn 赋值
+                      2568     ; 	小于 THR_SWITCH nPWMIn = PWM_IN_LOW
+                      2569     ; 	大于 THR_SWITCH nPWMIn = PWM_IN_HIGH
+                      2570     ; 
+                      2571     PROCEDURE_GETPWM: 
+0786    C3            2572     	CLR	C
+0787    E8            2573     MOV A , R0 
+0788    94A0          2574     SUBB A , # 160 
+078A    5005          2575     	JNC 	SET_PWM_IN_HIGH			; No nPWMIn = PWM_IN_HIGH
+078C    7800          2576     MOV R0 , # 0 
+078E    020793        2577     	JMP	SET_PWM_IN
+                      2578     SET_PWM_IN_HIGH: 
+0791    7801          2579     MOV R0 , # 1 
+                      2580     SET_PWM_IN: 
+0793    8874          2581     MOV NPWMIN , R0 
+                      2582     END_PROCEDURE_GETPWM: 
                       2583     
-                      2584     	; 
-                      2585     	; 判断是否 PWM_IN_HIGH
-0795    A874          2586     MOV R0 , NPWMIN 
-0797    B80107        2587     CJNE R0 , # 1 , LSSS 
-079A    787F          2588     MOV R0 , # 127 
-079C    8859          2589     MOV NEW_RCP , R0 
-079E    0207A8        2590     	JMP	ENDIF_STATE
-                      2591     LSSS: 
-                      2592     	; 最低油门
-07A1    7800          2593     MOV R0 , # 0 
-07A3    8859          2594     MOV NEW_RCP , R0 
-                      2595     
+                      2584     
+                      2585     
+                      2586     	; 例程: 判断是否 PWM_IN_HIGH
+0795    A874          2587     MOV R0 , NPWMIN 
+0797    B80107        2588     CJNE R0 , # 1 , LSSS 
+079A    78FF          2589     MOV R0 , # 255 
+079C    8859          2590     MOV NEW_RCP , R0 
+079E    0207A8        2591     	JMP	ENDIF_STATE
+                      2592     LSSS: 
+                      2593     	; 最低油门
+07A1    7800          2594     MOV R0 , # 0 
+07A3    8859          2595     MOV NEW_RCP , R0 
 07A5    0207A8        2596     	JMP	ENDIF_STATE
                       2597     
                       2598     
@@ -6108,7 +6108,7 @@ LOC     OBJ           LINE    SOURCE
                       6241     
                       6242     
                       6243     END
-MACRO ASSEMBLER BLHELI                                      05/25/15 23:44:33 PAGE     0
+MACRO ASSEMBLER BLHELI                                      05/26/15 09:07:55 PAGE     0
 
 
 SYMBOL TABLE LISTING
@@ -6627,6 +6627,7 @@ GOVERNOR_INT_MIN_~  C ADDR   0A05H   A
 GOVERNOR_LIMIT_PR~  C ADDR   09ABH   A 
 BEEP_F1. . . . . .  C ADDR   081FH   A 
 WAIT1S_LOOP. . . .  C ADDR   081AH   A 
+END_PROCEDURE_GET~  C ADDR   0795H   A 
 EEP_PGM_BEACON_DE~  C ADDR   1A1DH   A 
 EEP_PGM_BEACON_ST~  C ADDR   1A1CH   A 
 TAG_TEMPORARY_STO~  I ADDR   00D0H   A 
@@ -6920,6 +6921,7 @@ CALC_GOVERNOR_INT~  C ADDR   0AD6H   A
 GOVERNOR_LIMIT_IN~  C ADDR   09EBH   A 
 MULT_S16_BY_U8_DI~  C ADDR   08FAH   A 
 BEEP . . . . . . .  C ADDR   083BH   A 
+PROCEDURE_GETPWM .  C ADDR   0786H   A 
 PCA_INT_PPM_BIDIR~  C ADDR   0705H   A 
 PCA_INT_FALL . . .  C ADDR   066BH   A 
 T2_INT_PWM_EXIT. .  C ADDR   04E7H   A 
