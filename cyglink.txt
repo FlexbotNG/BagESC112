@@ -1,1 +1,0 @@
-"F:\Projects\FlexbotNG\BagESC112\BLHeli.obj"  TO( "F:\Projects\FlexbotNG\BagESC112\BLHeli" ) RS(256) PL(68) PW(78) LIBPATH(C:\Program Files\Raisonance\Ride\lib) 
