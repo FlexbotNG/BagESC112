@@ -53,6 +53,9 @@ DP_3A_Multi  					EQU 24
 Turnigy_Plush_12A_Main 			EQU 34
 Turnigy_Plush_12A_Tail 			EQU 35   
 Turnigy_Plush_12A_Multi 			EQU 36   
+Turnigy_Plush_40A_Main 			EQU 46
+Turnigy_Plush_40A_Tail 			EQU 47   
+Turnigy_Plush_40A_Multi 			EQU 48   
 Turnigy_KForce_40A_Main 			EQU 76   
 Turnigy_KForce_40A_Tail 			EQU 77   
 Turnigy_KForce_40A_Multi 		EQU 78    
@@ -96,6 +99,21 @@ ENDIF
 IF BESC == Turnigy_Plush_12A_Multi
 MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
 $include (Turnigy_Plush_12A.inc)	; Select Turnigy Plush 12A pinout
+ENDIF
+
+IF BESC == Turnigy_Plush_40A_Main
+MODE 	EQU 	0				; Choose mode. Set to 0 for main motor
+$include (Turnigy_Plush_40A.inc)	; Select Turnigy Plush 40A pinout
+ENDIF
+
+IF BESC == Turnigy_Plush_40A_Tail
+MODE 	EQU 	1				; Choose mode. Set to 1 for tail motor
+$include (Turnigy_Plush_40A.inc)	; Select Turnigy Plush 40A pinout
+ENDIF
+
+IF BESC == Turnigy_Plush_40A_Multi
+MODE 	EQU 	2				; Choose mode. Set to 2 for multirotor
+$include (Turnigy_Plush_40A.inc)	; Select Turnigy Plush 40A pinout
 ENDIF
 
 IF BESC == Turnigy_KForce_40A_Main

@@ -63,3 +63,23 @@ OMF to HEX/BIN converter V6.16.13.326
 Copyright (c) KEOLABS S.A.S. 1987-2013. All rights reserved. Raisonance is a KEOLABS brand.
 GENERATING EXTENDED HEX FILE: OUTPUT\SKYWALKER_40A_MULTI_REV11_2.HEX
 *****************************************************  
+ 
+*****************************************************  
+Turnigy_Plush_40A_MULTI  
+*****************************************************  
+MS-DOS MCS-51 MACRO ASSEMBLER MA51 V06.16.13.326 Hobby version (8 Kb code limited)
+Copyright (c) KEOLABS S.A.S. 1987-2013. All rights reserved. Raisonance is a KEOLABS brand.
+
+ASSEMBLY COMPLETE.   0 WARNING(S)   0 ERROR(S)
+MS-DOS MCS-51 CODE BANKING LINKER/LOCATOR LX51 V06.16.13.326 Hobby version (8 Kb code limited)
+Copyright (c) KEOLABS S.A.S. 1987-2013. All rights reserved. Raisonance is a KEOLABS brand.
+
+<Memory usage: code=6143,  internal data=180.0,  xdata/pdata=0>
+
+LINK/LOCATE RUN COMPLETE,  NO ERROR FOUND.
+
+
+OMF to HEX/BIN converter V6.16.13.326
+Copyright (c) KEOLABS S.A.S. 1987-2013. All rights reserved. Raisonance is a KEOLABS brand.
+GENERATING EXTENDED HEX FILE: OUTPUT\TURNIGY_PLUSH_40A_MULTI_REV11_2.HEX
+*****************************************************  
